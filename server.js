@@ -307,6 +307,11 @@ app.post('/packages/:id', needLogin, needAdmin, wrap(async (req, res) => {
     p.Updated = L.nowStamp();
   });
   if (moved) locate(req.params.id).catch(() => {});
+  // In-row changes on the Care packages list save without leaving the page.
+  if (req.get('x-requested-with') === 'fetch') {
+    const p = (await store.all('Care Packages')).find((x) => x.ID === req.params.id);
+    return p ? res.json({ ok: true, Status: p.Status, Printed: p.Printed, Connected: p.Connected }) : res.status(404).json({ ok: false });
+  }
   flash(req, 'Saved.');
   res.redirect(`/packages/${req.params.id}`);
 }));
