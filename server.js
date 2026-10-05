@@ -635,7 +635,8 @@ app.post('/booth/:id', needLogin, wrap(async (req, res) => {
   await store.mutate(async (db) => {
     const r = db['Booth Requests'].find((x) => x.ID === req.params.id);
     if (!r || !STATUS.booth.includes(to)) return;
-    if (to === 'Bought' && r.Status !== 'Bought') {
+    // Moving an item back and forward again doesn't draft a second "it's ready" text.
+    if (to === 'Bought' && r.Status === 'Requested' && !db.Messages.some((m) => m.Ref === r.ID)) {
       const s = Object.fromEntries(db.Settings.map((x) => [x.Key, x.Value]));
       await notify.queue(db, [{ ref: r.ID, to: r.Name, phone: r.Phone, body: L.fill(s.msg_booth_ready, { name: r.Name.split(' ')[0], item: r.Item, date: r['Bring On'], org: s.org_name }) }], req.user.Name);
       r['Handled By'] = req.user.Name;

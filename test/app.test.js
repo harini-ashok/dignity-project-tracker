@@ -175,6 +175,18 @@ test('Tempe Feed booth: request, buy, board', async () => {
   assert.strictEqual((await store.all('Booth Requests'))[0].Status, 'Bought');
   assert.match((await store.all('Messages')).at(-1).Body, /Shoes you asked for at Tempe Feed .* on 2026-10-13/);
   assert.match((await vol.get('/booth?day=2026-10-13')).text, /Jacket/);
+
+  // Items can move back a step and forward again without a second text.
+  const texts = (await store.all('Messages')).length;
+  await vol.post(`/booth/${rows[0].ID}`, { to: 'Requested', day: '2026-10-13' });
+  assert.strictEqual((await store.all('Booth Requests'))[0].Status, 'Requested');
+  assert.match((await vol.get('/booth?day=2026-10-13')).text, /← Bought|Bought →/);
+  await vol.post(`/booth/${rows[0].ID}`, { to: 'Bought', day: '2026-10-13' });
+  await vol.post(`/booth/${rows[0].ID}`, { to: 'At Booth', day: '2026-10-13' });
+  assert.match((await vol.get('/booth?day=2026-10-13')).text, /← Bought/);
+  await vol.post(`/booth/${rows[0].ID}`, { to: 'Bought', day: '2026-10-13' });
+  assert.strictEqual((await store.all('Booth Requests'))[0].Status, 'Bought');
+  assert.strictEqual((await store.all('Messages')).length, texts, 'no duplicate text');
 });
 
 test('packing shifts: sign up and choose packages', async () => {
