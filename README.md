@@ -7,6 +7,9 @@ packing shifts, inventory, and the Tempe Feed booth board.
 **All the data lives in one Excel file.** There is no database. Coordinators can download the
 workbook at any time, open it in Excel, and every sheet looks like the spreadsheets they already use.
 
+**For staff and volunteers:** the plain-language [user guide](docs/user-guide.md) walks through every page,
+with screenshots. A printable copy is in [docs/user-guide.pdf](docs/user-guide.pdf).
+
 ## What each person does with it
 
 | Who | What they do |
