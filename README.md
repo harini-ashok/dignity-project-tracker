@@ -85,6 +85,18 @@ The repo includes `render.yaml`, so setup is a few clicks:
 
 To copy the workbook off the server at any time, use **Excel → Download the workbook** in the site. Render also snapshots disks daily.
 
+### Hosting on cPanel (if your plan has "Setup Node.js App")
+
+Look in cPanel's **Software** section for **Setup Node.js App**. If it's there:
+
+1. **Get the code:** on GitHub, **Code → Download ZIP**. In cPanel **File Manager**, make a folder `dignity-tracker` in your home directory (next to `public_html`, not inside it), upload the zip there, **Extract** it, and move the files out of the extracted subfolder so `server.js` sits directly in `dignity-tracker`.
+2. **Setup Node.js App → Create Application:** Node.js version 20 or newer, Application mode *Production*, Application root `dignity-tracker`, Application URL the domain or subdomain you want (a subdomain like `tracker.yourdomain.com` is tidiest; create it under **Domains** first), Application startup file `server.js`.
+3. **Environment variables** (same screen): `ADMIN_NAME`, `ADMIN_PHONE`, `ADMIN_PIN` for the first coordinator. `DATA_DIR` can be left unset (the workbook goes in `dignity-tracker/data`).
+4. Press **Create**, then **Run NPM Install**, then **Restart**. Open the URL and sign in.
+5. Updating later: upload the new files over the old ones (never delete `data/`), Run NPM Install, Restart.
+
+Back up `dignity-tracker/data/` with cPanel's **Backup** tool or the site's **Excel → Download** button. Make sure the domain has SSL (cPanel shows it under SSL/TLS Status).
+
 ### Optional: automatic text messages (Twilio)
 
 Only needed if you want texts to go out without a person tapping send. WhatsApp one-tap buttons work without this.

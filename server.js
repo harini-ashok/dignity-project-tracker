@@ -646,5 +646,7 @@ async function start(port = process.env.PORT || 3000) {
   });
 }
 
-if (require.main === module) start();
+// cPanel's "Setup Node.js App" (Phusion Passenger) loads this file through its own
+// loader, so require.main isn't this module there.
+if (require.main === module || typeof PhusionPassenger !== 'undefined') start();
 module.exports = { app, start, store };
