@@ -1,0 +1,11 @@
+<%- include('partials/header') %>
+<section class="card narrow">
+  <h1><%= user.Name %></h1>
+  <p class="muted"><%= user.Phone %> · <%= user.Role %></p>
+  <form method="post" action="/me" class="stack">
+    <%- include('partials/csrf') %>
+    <label>New PIN<input name="pin" type="password" inputmode="numeric" minlength="4" required></label>
+    <button class="btn">Change PIN</button>
+  </form>
+</section>
+<%- include('partials/footer') %>

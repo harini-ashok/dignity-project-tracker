@@ -1,0 +1,48 @@
+<%- include('partials/header') %>
+<div class="spread"><h1>Hi <%= L.english(user.Name).split(' ')[0] %> 👋</h1>
+  <div class="row"><a class="btn orange" href="/map">Pick a delivery</a><a class="btn" href="/shifts">Help pack</a><a class="btn" href="/booth">Tempe Feed booth</a></div></div>
+
+<% if (admin) { %>
+<div class="stats">
+  <% for (const [s, n] of Object.entries(counts)) { if (['Cancelled'].includes(s)) continue; %>
+  <a class="stat <%= (s === 'New' && n) ? 'hot' : '' %>" href="/packages?status=<%= encodeURIComponent(s) %>"><b><%= n %></b><span><%= s %></span></a>
+  <% } %>
+</div>
+<% } else { %>
+<div class="stats">
+  <a class="stat hot" href="/map"><b><%= openForVolunteers %></b><span>deliveries waiting for a volunteer</span></a>
+  <a class="stat" href="/booth"><b><%= boothOpen %></b><span>booth items still to buy</span></a>
+</div>
+<% } %>
+
+<div class="grid">
+  <section class="card">
+    <h2>My deliveries</h2>
+    <% if (!mine.length) { %><p class="muted">None right now. <a href="/map">Open the map</a> to pick one.</p><% } %>
+    <% for (const p of mine) { %>
+      <p><a href="/packages/<%= p.ID %>"><b><%= p.ID %></b> · <%= p.Name %></a> <%- include('partials/pill', { s: p.Status }) %><br>
+      <span class="small muted">Pickup: <%= p['Pickup Time'] || 'to confirm' %> · Deliver: <%= p['Est. Delivery'] || 'to confirm' %></span></p>
+    <% } %>
+  </section>
+  <section class="card">
+    <h2>My packing</h2>
+    <% if (!myShifts.length && !myPacking.length) { %><p class="muted">You're not signed up to pack. <a href="/shifts">See packing shifts</a>.</p><% } %>
+    <% for (const s of myShifts) { %><p><b><%= s.Date %></b> <%= s.Start %>–<%= s.End %> at <%= s.Location %></p><% } %>
+    <% for (const p of myPacking) { %><p><a href="/packages/<%= p.ID %>"><%= p.ID %> · <%= p.Name %></a> <%- include('partials/pill', { s: p.Status }) %></p><% } %>
+  </section>
+  <section class="card">
+    <h2>Tempe Feed, <%= boothDay %></h2>
+    <p><b><%= boothOpen %></b> item(s) still to buy · <b><%= boothDue %></b> bought and ready for the booth.</p>
+    <a href="/booth">Open the booth board</a>
+  </section>
+  <% if (admin) { %>
+  <section class="card">
+    <h2>Running low</h2>
+    <% if (!short.length) { %><p class="muted">Inventory covers every open request.</p><% } else { %>
+    <table><tr><th>Item</th><th>Need</th><th>Have</th></tr>
+    <% for (const s of short) { %><tr><td><%= s.item %></td><td><%= s.needed %></td><td><%= s.onHand %></td></tr><% } %></table>
+    <p><a href="/inventory">Full shopping list</a></p><% } %>
+  </section>
+  <% } %>
+</div>
+<%- include('partials/footer') %>

@@ -1,0 +1,37 @@
+<%- include('partials/header') %>
+<h1>Packing shifts</h1>
+<p class="muted">Come help pack care packages at HQ. Sign up for a time and tick the packages you'll pack, so nobody packs the same one twice.</p>
+<% if (!upcoming.length) { %><div class="card"><p class="muted">No packing shifts are scheduled yet.</p></div><% } %>
+<div class="grid">
+<% for (const s of upcoming) { const names = s.Volunteers.split(',').map((x) => x.trim()).filter(Boolean); const joined = names.some((n) => n.toLowerCase() === user.Name.toLowerCase()); %>
+  <section class="card">
+    <h2 style="margin-top:0"><%= new Date(s.Date + 'T12:00').toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }) %></h2>
+    <p><b><%= s.Start %>–<%= s.End %></b> at <%= s.Location %><br><span class="small muted"><%= names.length %>/<%= s.Capacity %> signed up<%= names.length ? ': ' + names.join(', ') : '' %></span></p>
+    <% if (s.Notes) { %><p class="small"><%= s.Notes %></p><% } %>
+    <% const mine = toPack.filter((p) => p['Packing Shift'] === s.ID); if (mine.length) { %>
+      <p class="small"><b>Being packed this shift:</b> <%= mine.map((p) => `${p.ID} (${p.Packer})`).join(", ") %></p><% } %>
+    <form method="post" action="/shifts/<%= s.ID %>/join" class="stack">
+      <%- include('partials/csrf') %>
+      <% const free = toPack.filter((p) => !p.Packer || p.Packer === user.Name); if (free.length) { %>
+      <details><summary class="small">Choose packages to pack (<%= free.length %> waiting)</summary><div class="checks" style="margin-top:6px">
+        <% for (const p of free) { %><label><input type="checkbox" name="pkg" value="<%= p.ID %>" <%= p.Packer === user.Name ? 'checked' : '' %>><%= p.ID %> · <%= L.english(p.Name).split(' ')[0] %></label><% } %>
+      </div></details><% } %>
+      <button class="<%= joined ? '' : 'primary' %>"><%= joined ? 'Update my packages' : 'Sign me up' %></button>
+    </form>
+    <% if (joined) { %><form method="post" action="/shifts/<%= s.ID %>/leave" style="margin-top:6px"><%- include('partials/csrf') %><button class="small">I can't make it</button></form><% } %>
+  </section>
+<% } %>
+</div>
+<% if (admin) { %>
+<section class="card" style="max-width:640px">
+  <h2 style="margin-top:0">Add a shift</h2>
+  <form method="post" action="/shifts" class="stack">
+    <%- include('partials/csrf') %>
+    <div class="fields"><label>Date<input type="date" name="Date" required></label><label>Start<input type="time" name="Start" value="10:00"></label><label>End<input type="time" name="End" value="12:00"></label></div>
+    <div class="fields"><label>Where<input name="Location" value="HQ"></label><label>Spots<input type="number" name="Capacity" value="4" min="1"></label></div>
+    <label>Notes<input name="Notes" placeholder="Parking, what to bring…"></label>
+    <button class="primary">Add shift</button>
+  </form>
+</section>
+<% } %>
+<%- include('partials/footer') %>

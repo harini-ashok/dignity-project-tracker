@@ -1,0 +1,41 @@
+<%- include('partials/header') %>
+<h1>Inventory</h1>
+<div class="grid-2">
+<section class="card">
+  <h2 style="margin-top:0">Shopping list</h2>
+  <p class="small muted">What open requests need minus what's on the shelf. Items that clash with someone's restrictions aren't counted.</p>
+  <% if (!short.length) { %><p>Nothing to buy right now 🎉</p><% } else { %>
+  <div class="table-wrap"><table><tr><th>Item</th><th>Requested</th><th>On hand</th><th>Buy</th></tr>
+  <% for (const s of short) { %><tr class="<%= s.short ? 'warn' : '' %>"><td><%= s.item %><% if (!s.known) { %> <span class="tag" style="background:#f3eedb;color:#7a6512">not tracked</span><% } %><% if (s.low) { %> <span class="tag">running low</span><% } %></td><td><%= s.needed %></td><td><%= s.onHand %></td><td><b><%= s.known ? s.short : '?' %></b></td></tr><% } %>
+  </table></div><% } %>
+</section>
+<% if (admin) { %>
+<section class="card">
+  <h2 style="margin-top:0">Add an item</h2>
+  <form method="post" action="/inventory" class="stack">
+    <%- include('partials/csrf') %><input type="hidden" name="action" value="add">
+    <div class="fields"><label>Item<input name="Item" required placeholder="Use the same name as the form, e.g. Toothpaste"></label>
+      <label>Category<select name="Category"><option>Essential</option><option>Food</option><option>Other</option></select></label></div>
+    <div class="fields"><label>On hand<input name="On Hand" type="number" min="0" value="0"></label><label>Warn when at or below<input name="Low At" type="number" min="0" value="0"></label></div>
+    <div class="checks"><label><input type="checkbox" name="Has Aerosol" value="1">Aerosol / spray</label><label><input type="checkbox" name="Has Alcohol" value="1">Contains alcohol</label></div>
+    <label>Allergens <span class="small muted">(comma separated: peanut, gluten, dairy…)</span><input name="Allergens"></label>
+    <button class="primary">Add</button>
+  </form>
+</section>
+<% } %>
+</div>
+<section class="card">
+  <h2 style="margin-top:0">On the shelf</h2>
+  <form method="post" action="/inventory">
+    <%- include('partials/csrf') %><input type="hidden" name="action" value="counts">
+    <div class="table-wrap"><table><tr><th>Item</th><th>Category</th><th>On hand</th><th>Flags</th></tr>
+    <% for (const i of inv) { %><tr class="<%= Number(i['Low At']) && Number(i['On Hand']) <= Number(i['Low At']) ? 'warn' : '' %>">
+      <td><%= i.Item %></td><td><%= i.Category %></td>
+      <td><% if (admin) { %><input name="qty_<%= i.Item %>" type="number" min="0" value="<%= i['On Hand'] %>" style="max-width:90px"><% } else { %><%= i['On Hand'] %><% } %></td>
+      <td><% if (/^y/i.test(i['Has Aerosol'])) { %><span class="tag">aerosol</span><% } %><% if (/^y/i.test(i['Has Alcohol'])) { %><span class="tag">alcohol</span><% } %><% if (i.Allergens) { %><span class="tag"><%= i.Allergens %></span><% } %></td></tr><% } %>
+    </table></div>
+    <% if (!inv.length) { %><p class="muted">No items yet. Add them here or type them straight into the Inventory sheet in Excel.</p><% } %>
+    <% if (admin && inv.length) { %><p><button class="primary">Save counts</button></p><% } %>
+  </form>
+</section>
+<%- include('partials/footer') %>

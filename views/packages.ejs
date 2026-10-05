@@ -1,0 +1,38 @@
+<%- include('partials/header') %>
+<div class="spread"><h1>Care packages</h1>
+  <div class="row"><a class="btn" href="/import">Import Google Form</a><a class="btn" href="/request" target="_blank">New request form</a>
+  <form method="post" action="/geocode-missing" class="inline"><%- include('partials/csrf') %><button>Place addresses on map</button></form></div></div>
+<form class="row card" method="get">
+  <select name="status" style="max-width:220px"><option value="">All statuses</option>
+    <% for (const s of statuses) { %><option <%= s === status ? 'selected' : '' %>><%= s %></option><% } %></select>
+  <input name="q" value="<%= q %>" placeholder="Search name, phone, zip, item…" style="max-width:300px">
+  <button>Filter</button>
+</form>
+<form method="post" action="/packages-bulk">
+  <%- include('partials/csrf') %>
+  <div class="row" style="margin-bottom:8px">
+    <span class="muted small">With selected:</span>
+    <select name="to" style="max-width:220px">
+      <option value="labels">Print labels</option><option value="printed">Mark printed</option>
+      <% for (const s of statuses) { %><option value="<%= s %>">Set status: <%= s %></option><% } %>
+    </select><button>Apply</button>
+  </div>
+  <div class="table-wrap"><table>
+    <tr><th><input type="checkbox" onclick="document.querySelectorAll('.pick').forEach(c=>c.checked=this.checked)"></th><th>ID</th><th>Status</th><th>Name</th><th>Phone</th><th>Zip</th><th>Lang</th><th>Needs</th><th>Volunteer</th><th>Pickup</th><th>Printed</th><th>Connected</th></tr>
+    <% for (const p of pk) { %>
+    <tr>
+      <td><input type="checkbox" class="pick" name="id" value="<%= p.ID %>"></td>
+      <td><a href="/packages/<%= p.ID %>"><%= p.ID %></a></td>
+      <td><%- include('partials/pill', { s: p.Status }) %></td>
+      <td><%= p.Name %><% if (/^pickup/i.test(p['Receive By'])) { %> <span class="tag ok">pickup</span><% } %></td>
+      <td><%= p.Phone %></td><td><%= p.Zip %><% if (!p.Lat) { %> <span class="tag" title="Not on the map yet">no pin</span><% } %></td>
+      <td><%= p.Language %></td>
+      <td class="small"><%= (p.Needs || '').replace(/;/g, ' ·') %></td>
+      <td><%= p['Delivery Volunteer'] %></td><td class="small"><%= p['Pickup Time'] %></td>
+      <td><%= p.Printed %></td><td><%= p.Connected %></td>
+    </tr>
+    <% } %>
+  </table></div>
+  <% if (!pk.length) { %><p class="muted">Nothing here yet. Import your Google Form responses to get started.</p><% } %>
+</form>
+<%- include('partials/footer') %>

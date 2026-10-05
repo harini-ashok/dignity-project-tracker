@@ -1,0 +1,75 @@
+<%- include('partials/header', { head: '<link rel="stylesheet" href="/vendor/leaflet/leaflet.css">' }) %>
+<% const colors = ['#e0245e','#1f6fb2','#17a2b8','#4c9a2a','#e8771a','#7b3fa0','#e0a800','#138a8a','#c0392b','#2f5233']; %>
+<div class="spread noprint">
+  <div><h1>Delivery map</h1>
+  <p class="muted">Pick a numbered delivery you can do. Exact addresses and phone numbers show once it's yours.</p></div>
+  <div class="row">
+    <% if (admin) { %><button class="btn wa" id="share">Share list to WhatsApp</button><% } %>
+    <button class="btn" onclick="window.print()">Print</button>
+  </div>
+</div>
+<div class="mapwrap">
+  <aside class="maplist">
+    <h2><%= settings.org_name %></h2>
+    <p class="small muted">Week of <%= new Date(week + 'T12:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric' }) %> · <%= pins.reduce((n, p) => n + p.packages.filter((x) => x.open).length, 0) %> open</p>
+    <% if (!pins.length) { %><p class="muted">No deliveries are waiting right now. Thank you!</p><% } %>
+    <% for (const pin of pins) { %>
+    <div class="pin" id="pin-<%= pin.n %>">
+      <div class="num" style="background:<%= colors[(pin.n - 1) % colors.length] %>"><%= pin.n %></div>
+      <div style="flex:1">
+        <b><%= pin.street %></b>
+        <% if (pin.packages.length > 1) { %><div class="small" style="color:#c0392b">(<%= pin.packages.length %> deliveries here)</div><% } %>
+        <% if (!pin.lat) { %><div class="small muted">Not on the map yet</div><% } %>
+        <% for (const p of pin.packages) { %>
+          <div class="small" style="margin-top:4px">
+            <% if (admin || p.mine) { %><a href="/packages/<%= p.id %>"><%= p.id %></a><% } else { %><%= p.id %><% } %>
+            · <%= p.name %><% if (p.household) { %> · household of <%= p.household %><% } %><% if (p.language && p.language !== 'English') { %> · <%= p.language %><% } %>
+            <%- include('partials/pill', { s: p.status }) %>
+            <% if (p.restrictions) { %><br><span class="tag"><%= p.restrictions %></span><% } %>
+            <% if (p.volunteer && !p.open) { %><br><span class="muted"><%= p.mine ? 'You are delivering this' : 'Delivering: ' + p.volunteer %></span><% } %>
+          </div>
+          <% if (p.open) { %>
+          <details class="claim noprint"><summary>I'll deliver this</summary>
+            <form method="post" action="/packages/<%= p.id %>/claim" class="stack" style="margin-top:6px">
+              <%- include('partials/csrf') %>
+              <label>When can you pick it up? <input name="pickup" placeholder="e.g. Sat 10am" required></label>
+              <label>When will you deliver? <input name="eta" placeholder="e.g. Sat 11:30am" required></label>
+              <button class="orange small">Claim delivery <%= pin.n %></button>
+            </form>
+          </details>
+          <% } %>
+        <% } %>
+      </div>
+    </div>
+    <% } %>
+    <p class="small muted">Locations are approximate. Use the full address on your delivery page for navigation. Thank you for helping bring dignity and hope!</p>
+  </aside>
+  <div id="map"></div>
+</div>
+<script src="/vendor/leaflet/leaflet.js"></script>
+<script>
+  const pins = <%- JSON.stringify(pins).replace(/</g, '\\u003c') %>;
+  const colors = <%- JSON.stringify(colors) %>;
+  const map = L.map('map').setView(<%- JSON.stringify(center) %>, 10);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18, attribution: '&copy; OpenStreetMap contributors' }).addTo(map);
+  const bounds = [];
+  for (const p of pins) {
+    if (p.lat == null) continue;
+    const icon = L.divIcon({ className: 'num-marker', html: `<div class="num" style="background:${colors[(p.n - 1) % colors.length]}">${p.n}</div>`, iconSize: [30, 30], iconAnchor: [15, 15] });
+    L.marker([p.lat, p.lng], { icon }).addTo(map).on('click', () => {
+      const el = document.getElementById('pin-' + p.n);
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.style.background = '#fdeedd'; setTimeout(() => (el.style.background = ''), 1500);
+    });
+    bounds.push([p.lat, p.lng]);
+  }
+  if (bounds.length) map.fitBounds(bounds, { padding: [40, 40], maxZoom: 13 });
+  const share = document.getElementById('share');
+  if (share) share.onclick = () => {
+    const open = pins.filter((p) => p.packages.some((x) => x.open));
+    const lines = open.map((p) => `${p.n}. ${p.street}${p.packages.length > 1 ? ` (${p.packages.length} deliveries)` : ''}`);
+    const text = `Deliveries this week 🧡\n${lines.join('\n')}\n\nPick one here: ${location.origin}/map`;
+    window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank');
+  };
+</script>
+<%- include('partials/footer') %>

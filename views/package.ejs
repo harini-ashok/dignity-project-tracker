@@ -1,0 +1,139 @@
+<%- include('partials/header') %>
+<% const wa = (phone, text) => L.waLink(phone, text); const sms = (phone, text) => L.smsLink(phone, text); %>
+<div class="spread">
+  <h1><%= p.ID %> · <%= p.Name %> <%- include('partials/pill', { s: p.Status }) %></h1>
+  <div class="row noprint"><a class="btn" href="/packages/<%= p.ID %>/label" target="_blank">Print label</a><% if (admin) { %><a class="btn" href="/packages">All packages</a><% } %></div>
+</div>
+
+<div class="grid-2">
+<div>
+  <section class="card">
+    <h2 style="margin-top:0">Delivery</h2>
+    <dl class="kv">
+      <dt>Address</dt><dd><%= p.Address || 'Not given — ask them by text' %><% if (p.Address) { %> · <a href="https://www.google.com/maps/dir/?api=1&destination=<%= encodeURIComponent(p.Address) %>" target="_blank">Directions</a><% } %></dd>
+      <dt>Phone</dt><dd><a href="tel:<%= p.Phone %>"><%= p.Phone %></a></dd>
+      <dt>Language</dt><dd><%= p.Language %></dd>
+      <dt>Receive by</dt><dd><%= p['Receive By'] %></dd>
+      <dt>Volunteer</dt><dd><%= p['Delivery Volunteer'] || '—' %><% if (vol) { %> (<%= vol.Phone %>)<% } %></dd>
+      <dt>Pickup at HQ</dt><dd><%= p['Pickup Time'] || '—' %><% if (settings.hq_address) { %> · <%= settings.hq_address %><% } %></dd>
+      <dt>Est. delivery</dt><dd><%= p['Est. Delivery'] || '—' %></dd>
+      <dt>Label printed</dt><dd><%= p.Printed || 'No' %></dd>
+      <dt>Group chat</dt><dd><%= p.Connected === 'Yes' ? 'Connected' : 'Not connected yet' %></dd>
+    </dl>
+    <div class="row noprint" style="margin-top:12px">
+      <% if (['Volunteer Assigned', 'Packed & Ready'].includes(p.Status) && (admin || user.Name === p['Delivery Volunteer'])) { %>
+        <form method="post" action="/packages/<%= p.ID %>/step" class="inline"><%- include('partials/csrf') %><input type="hidden" name="to" value="Picked Up"><button>I picked it up</button></form>
+      <% } %>
+      <% if (['Volunteer Assigned', 'Packed & Ready', 'Picked Up'].includes(p.Status) && (admin || user.Name === p['Delivery Volunteer'])) { %>
+        <form method="post" action="/packages/<%= p.ID %>/step" class="inline"><%- include('partials/csrf') %><input type="hidden" name="to" value="Delivered"><button class="primary">Mark delivered</button></form>
+        <form method="post" action="/packages/<%= p.ID %>/release" class="inline"><%- include('partials/csrf') %><button class="small">I can't do this one</button></form>
+      <% } %>
+    </div>
+  </section>
+
+  <% if (p['Delivery Volunteer'] || admin) { %>
+  <section class="card noprint">
+    <h2 style="margin-top:0">Coordinate</h2>
+    <p class="small muted">Each button opens WhatsApp (or texting) on your phone with the message filled in. Nothing is sent until you press send.</p>
+    <div class="stack">
+      <div><b>To <%= p.Name %></b> <span class="small muted">(volunteer on the way)</span><br>
+        <a class="btn wa small" href="<%= wa(p.Phone, texts.requester) %>" target="_blank">WhatsApp</a> <a class="btn small" href="<%= sms(p.Phone, texts.requester) %>">Text</a></div>
+      <% if (vol) { %>
+      <div><b>To <%= vol.Name %></b> <span class="small muted">(pickup details)</span><br>
+        <a class="btn wa small" href="<%= wa(vol.Phone, texts.volunteer) %>" target="_blank">WhatsApp</a> <a class="btn small" href="<%= sms(vol.Phone, texts.volunteer) %>">Text</a></div>
+      <div><b>Group intro</b> <span class="small muted">— start a WhatsApp group with both of them and paste this:</span>
+        <textarea readonly onclick="this.select()"><%= texts.intro %></textarea>
+        <% if (admin) { %><form method="post" action="/packages/<%= p.ID %>/flag" class="inline"><%- include('partials/csrf') %><input type="hidden" name="flag" value="Connected"><button class="small"><%= p.Connected === 'Yes' ? 'Undo connected' : 'Mark group chat connected' %></button></form><% } %>
+      </div>
+      <% } %>
+      <div><b>After delivery</b><br>
+        <a class="btn wa small" href="<%= wa(p.Phone, texts.delivered) %>" target="_blank">WhatsApp thank-you</a></div>
+    </div>
+  </section>
+  <% } %>
+
+  <section class="card">
+    <h2 style="margin-top:0">Packing list</h2>
+    <% if (p['Packed Items']) { %><p class="tag ok">Packed: <%= p['Packed Items'] %> (by <%= p.Packer %>)</p><% } %>
+    <% if (p.Restrictions || p.Allergies || p['Food Dislikes']) { %>
+      <p><% if (p.Restrictions) { %><span class="tag"><%= p.Restrictions %></span><% } %>
+      <% if (p.Allergies) { %><span class="tag">Allergies: <%= p.Allergies %></span><% } %>
+      <% if (p['Food Dislikes']) { %><span class="tag">Won't eat: <%= p['Food Dislikes'] %></span><% } %></p>
+    <% } %>
+    <% if (p.Needs) { %><p class="small"><b>Priorities:</b> <%= p.Needs %></p><% } %>
+    <form method="post" action="/packages/<%= p.ID %>/pack" class="packlist">
+      <%- include('partials/csrf') %>
+      <% if (!list.length) { %><p class="muted">No checklist items. See the needs and notes below.</p><% } %>
+      <% for (const it of list) { %>
+        <label><input type="checkbox" name="item" value="<%= it.name %>" <%= it.conflict ? '' : 'checked' %>>
+          <span><%= it.name %><%= it.qty > 1 ? ' ×' + it.qty : '' %>
+          <% if (it.conflict) { %><span class="tag">Don't pack: <%= it.conflict %></span><% } %>
+          <% if (it.onHand === null) { %><span class="tag" style="background:#f3eedb;color:#7a6512">not in inventory</span><% } else if (it.onHand < it.qty) { %><span class="tag">only <%= it.onHand %> left</span><% } %></span></label>
+      <% } %>
+      <% if (p['Clothing & Sizes']) { %><p class="small"><b>Clothing & sizes:</b> <%= p['Clothing & Sizes'] %></p><% } %>
+      <% if (p.Pets) { %><p class="small"><b>Pets:</b> <%= p.Pets %></p><% } %>
+      <% if (!p['Packed Items']) { %><button class="primary">Mark packed (takes checked items out of inventory)</button><% } %>
+    </form>
+  </section>
+</div>
+
+<div>
+  <section class="card">
+    <h2 style="margin-top:0">About this request</h2>
+    <dl class="kv">
+      <dt>Submitted</dt><dd><%= p.Submitted %></dd>
+      <dt>Household</dt><dd><%= p.Household %></dd>
+      <dt>Housing</dt><dd><%= p.Housing %></dd>
+      <dt>Filled out by</dt><dd><%= p['Filled By'] %></dd>
+      <dt>Notes</dt><dd><%= p.Notes %></dd>
+    </dl>
+    <% if (answers.length) { %>
+    <details style="margin-top:12px"><summary>All <%= answers.length %> Google Form answers</summary>
+      <dl class="kv" style="margin-top:8px"><% for (const a of answers) { %><dt><%= a.Question %></dt><dd><%= a.Answer %></dd><% } %></dl>
+    </details><% } %>
+  </section>
+
+  <% if (admin) { %>
+  <section class="card noprint">
+    <h2 style="margin-top:0">Edit (coordinator)</h2>
+    <form method="post" action="/packages/<%= p.ID %>" class="stack">
+      <%- include('partials/csrf') %>
+      <div class="fields">
+        <label>Status<select name="Status"><% for (const s of statuses) { %><option <%= s === p.Status ? 'selected' : '' %>><%= s %></option><% } %></select></label>
+        <label>Delivery volunteer<select name="Delivery Volunteer"><option value="">— nobody yet —</option>
+          <% for (const v of volunteers) { %><option <%= v.Name === p['Delivery Volunteer'] ? 'selected' : '' %>><%= v.Name %></option><% } %>
+          <% if (p['Delivery Volunteer'] && !volunteers.some((v) => v.Name === p['Delivery Volunteer'])) { %><option selected><%= p['Delivery Volunteer'] %></option><% } %></select></label>
+        <label>Pickup time<input name="Pickup Time" value="<%= p['Pickup Time'] %>"></label>
+        <label>Est. delivery<input name="Est. Delivery" value="<%= p['Est. Delivery'] %>"></label>
+        <label>Packer<input name="Packer" value="<%= p.Packer %>"></label>
+        <label>Packing shift<select name="Packing Shift"><option value="">—</option><% for (const s of shifts) { %><option value="<%= s.ID %>" <%= s.ID === p['Packing Shift'] ? 'selected' : '' %>><%= s.Date %> <%= s.Start %></option><% } %></select></label>
+        <label>Printed<select name="Printed"><% for (const o of ['No', 'Yes']) { %><option <%= o === (p.Printed || 'No') ? 'selected' : '' %>><%= o %></option><% } %></select></label>
+        <label>Connected<select name="Connected"><% for (const o of ['No', 'Yes']) { %><option <%= o === (p.Connected || 'No') ? 'selected' : '' %>><%= o %></option><% } %></select></label>
+      </div>
+      <div class="fields">
+        <label>Name<input name="Name" value="<%= p.Name %>"></label>
+        <label>Phone<input name="Phone" value="<%= p.Phone %>"></label>
+        <label>Language<input name="Language" value="<%= p.Language %>"></label>
+        <label>Receive by<input name="Receive By" value="<%= p['Receive By'] %>"></label>
+      </div>
+      <label>Address<input name="Address" value="<%= p.Address %>"></label>
+      <div class="fields">
+        <label>Zip<input name="Zip" value="<%= p.Zip %>"></label>
+        <label>Lat<input name="Lat" value="<%= p.Lat %>"></label>
+        <label>Lng<input name="Lng" value="<%= p.Lng %>"></label>
+      </div>
+      <label>Items requested <span class="muted small">(comma separated, add "x2" for quantity)</span><textarea name="Items Requested"><%= p['Items Requested'] %></textarea></label>
+      <label>Restrictions where they live<input name="Restrictions" value="<%= p.Restrictions %>" placeholder="No alcohol, No aerosol"></label>
+      <div class="fields">
+        <label>Allergies<input name="Allergies" value="<%= p.Allergies %>"></label>
+        <label>Food dislikes<input name="Food Dislikes" value="<%= p['Food Dislikes'] %>"></label>
+      </div>
+      <label>Clothing & sizes<textarea name="Clothing & Sizes"><%= p['Clothing & Sizes'] %></textarea></label>
+      <label>Coordinator notes<textarea name="Admin Notes"><%= p['Admin Notes'] %></textarea></label>
+      <button class="primary">Save</button>
+    </form>
+  </section>
+  <% } %>
+</div>
+</div>
+<%- include('partials/footer') %>

@@ -1,0 +1,16 @@
+<%- include('partials/header') %>
+<div class="noprint spread"><p class="muted">Print these and tape one to each bag.</p><button class="primary" onclick="window.print()">Print</button></div>
+<div class="label-sheet">
+<% for (const p of ps) { const list = L.packingList(p, inv); %>
+  <div class="label">
+    <div class="spread"><span class="big"><%= p.ID %></span><span><%= p['Pickup Time'] %></span></div>
+    <div style="font-size:1.2rem;font-weight:700"><%= p.Name %></div>
+    <div>Deliver by: <b><%= p['Delivery Volunteer'] || '________' %></b></div>
+    <div class="small"><%= L.streetOnly(p.Address) %></div>
+    <% if (p.Restrictions || p.Allergies) { %><div class="small"><b>⚠ <%= [p.Restrictions, p.Allergies && 'Allergies: ' + p.Allergies].filter(Boolean).join(' · ') %></b></div><% } %>
+    <div class="small" style="margin-top:6px"><%= (p['Packed Items'] || list.filter((i) => !i.conflict).map((i) => i.name + (i.qty > 1 ? ' x' + i.qty : '')).join(', ')) %></div>
+  </div>
+<% } %>
+</div>
+<% if (!ps.length) { %><p class="muted">No packages to label.</p><% } %>
+<%- include('partials/footer') %>

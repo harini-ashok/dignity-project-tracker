@@ -1,0 +1,25 @@
+{
+  "name": "dignity-project-tracker",
+  "version": "0.1.0",
+  "description": "Care package and Tempe Feed booth tracker for Phoenix Dignity Project, backed by an Excel workbook",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test test/*.test.js",
+    "demo": "rm -rf demo-data && DATA_DIR=demo-data node scripts/seed-demo.js && DATA_DIR=demo-data GEOCODER=off node server.js"
+  },
+  "license": "UNLICENSED",
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "ejs": "^3.1.10",
+    "exceljs": "^4.4.0",
+    "express": "^5.2.1",
+    "express-session": "^1.19.0",
+    "leaflet": "^1.9.4",
+    "multer": "^2.4.0"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "private": true
+}
