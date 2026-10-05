@@ -259,16 +259,17 @@ test('google sheet sync is two-way', async () => {
     db['Care Packages'].push({ ID: 'CP-9001', Submitted: '2026-10-02 10:00', Status: 'New', Name: "'=HYPERLINK(1)", Phone: '480-555-0191', Source: 'Website', Updated: '2026-10-02 10:00' });
   });
 
-  // Sheet -> site: only the cell someone edited (Volunteer) is applied; the stale status in the sheet is not.
+  // Sheet -> site: only the cell someone edited (Volunteer) is applied; the stale "New" in the sheet is not,
+  // and assigning a volunteer moves the request along.
   const tracked = [id, 'New', 'Sheet Volunteer', '', '', '', 'Volunteer'];
   j = await post([head, ['10/1/2026 9:00:00', 'Two Way', '480-555-0190', ...tracked]]);
   assert.strictEqual(j.added, 0);
   assert.strictEqual(j.applied, 1);
   const p = await pkg(id);
   assert.strictEqual(p['Delivery Volunteer'], 'Sheet Volunteer');
-  assert.strictEqual(p.Status, 'Ready for Volunteer');
+  assert.strictEqual(p.Status, 'Volunteer Assigned');
   const back = j.write.find((x) => x.row === 2).values;
-  assert.deepStrictEqual(back.slice(0, 3), [id, 'Ready for Volunteer', 'Sheet Volunteer']);
+  assert.deepStrictEqual(back.slice(0, 3), [id, 'Volunteer Assigned', 'Sheet Volunteer']);
   assert.strictEqual(back[6], '', 'the edit marker is cleared');
 
   // Website requests are appended to the sheet, under the right questions, formulas defused.
@@ -281,6 +282,26 @@ test('google sheet sync is two-way', async () => {
   j = await post([head, ['10/1/2026 9:00:00', 'Two Way', '480-555-0190', ...tracked.slice(0, 6), ''], line]);
   assert.ok(!j.append.some((l) => l[3] === 'CP-9001'));
   assert.strictEqual(j.added, 0);
+
+  // Answers edited in the sheet (here the address, column 4) replace the site's copy.
+  const head2 = [...head.slice(0, 3), 'Address', ...TRACKER_COLUMNS];
+  const t2 = [id, 'Volunteer Assigned', 'Sheet Volunteer', '', '', ''];
+  await store.mutate((db) => { db['Care Packages'].find((x) => x.ID === id).Address = '5 Old Rd, Phoenix, AZ 85003'; });
+  j = await post([head2, ['10/1/2026 9:00:00', 'Two Way', '480-555-0190', '1 New St, Tempe, AZ 85281', ...t2, '#4']]);
+  assert.strictEqual(j.applied, 1);
+  let q = await pkg(id);
+  assert.strictEqual(q.Address, '1 New St, Tempe, AZ 85281');
+  assert.strictEqual(q.Zip, '85281');
+  assert.ok((await store.all('Form Answers')).some((a) => a.ID === id && a.Question === 'Address' && a.Answer === '1 New St, Tempe, AZ 85281'));
+  assert.ok(!j.cells.some((c) => c.row === 2), 'nothing to send back for a row just edited in the sheet');
+
+  // An address changed on the site goes back into the sheet's Address cell.
+  await store.mutate((db) => { db['Care Packages'].find((x) => x.ID === id).Address = '9 Site Rd, Mesa, AZ 85201'; });
+  j = await post([head2, ['10/1/2026 9:00:00', 'Two Way', '480-555-0190', '1 New St, Tempe, AZ 85281', ...t2, '']]);
+  assert.strictEqual(j.applied, 0);
+  assert.deepStrictEqual(j.cells.find((c) => c.row === 2), { row: 2, col: 4, edited: '', value: '9 Site Rd, Mesa, AZ 85201' });
+  q = await pkg(id);
+  assert.strictEqual(q.Address, '9 Site Rd, Mesa, AZ 85201', 'an unedited sheet cell does not overwrite the site');
 });
 
 test('messages: per-status care texts, two groups, coordinators only', async () => {

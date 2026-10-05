@@ -241,7 +241,8 @@ app.get('/packages', needLogin, needAdmin, wrap(async (req, res) => {
   const s = res.locals.settings;
   const vols = await store.all('Volunteers');
   const texts = Object.fromEntries(pk.map((p) => [p.ID, L.careText(p, s, vols.find((v) => sameUser(v.Name, p['Delivery Volunteer'])))]));
-  res.render('packages', { title: 'Care packages', pk, status, q, statuses: STATUS.care, texts });
+  const volunteers = vols.filter((v) => v.Status === 'Active').map((v) => v.Name).sort();
+  res.render('packages', { title: 'Care packages', pk, status, q, statuses: STATUS.care, texts, volunteers });
 }));
 
 async function loadPackage(req, res) {
@@ -295,6 +296,7 @@ app.post('/packages/:id', needLogin, needAdmin, wrap(async (req, res) => {
     }
     if (before.Address !== p.Address && !req.body.Zip) p.Zip = L.zipOf(p.Address);
     if (p['Delivery Volunteer'] && ['New', 'Texted - No Response', 'Ready for Volunteer'].includes(p.Status)) p.Status = 'Volunteer Assigned';
+    if (!p['Delivery Volunteer'] && before['Delivery Volunteer'] && p.Status === 'Volunteer Assigned') p.Status = L.CLAIMABLE; // back on the map
     if (p.Status === 'Picked Up' && before.Status !== 'Picked Up') {
       const vol = db.Volunteers.find((v) => sameUser(v.Name, p['Delivery Volunteer']));
       await notify.queue(db, [{ ref: p.ID, to: p.Name, phone: p.Phone, body: L.careText(p, s, vol) }], req.user.Name);
@@ -317,7 +319,7 @@ app.post('/packages/:id', needLogin, needAdmin, wrap(async (req, res) => {
   // In-row changes on the Care packages list save without leaving the page.
   if (req.get('x-requested-with') === 'fetch') {
     const p = (await store.all('Care Packages')).find((x) => x.ID === req.params.id);
-    return p ? res.json({ ok: true, Status: p.Status, Printed: p.Printed, Connected: p.Connected }) : res.status(404).json({ ok: false });
+    return p ? res.json({ ok: true, Status: p.Status, Printed: p.Printed, Connected: p.Connected, 'Delivery Volunteer': p['Delivery Volunteer'] }) : res.status(404).json({ ok: false });
   }
   flash(req, 'Saved.');
   res.redirect(`/packages/${req.params.id}`);
@@ -424,7 +426,7 @@ function importParsed(parsed) {
     const byId = new Map(db['Care Packages'].map((p) => [p.ID, p]));
     const seenAnswers = new Set(db['Form Answers'].map((a) => `${a.ID}|${a.Question}|${a.Answer}`));
     for (const parsedRow of parsed.rows) {
-      const { answers, tracker, sheetRow, ...r } = parsedRow;
+      const { answers, tracker, sheetRow, raw, cols, questions, ...r } = parsedRow;
       const row = Object.fromEntries(Object.entries(r).map(([k, v]) => [k, safe(v)]));
       let p = (tracker && byId.get(tracker.ID)) || byKey.get(key(r));
       if (p) {
@@ -475,8 +477,8 @@ app.post('/api/form-sync', express.json({ limit: '10mb' }), wrap(async (req, res
     const v = `${L.nowStamp()} · ${added.length} new, ${updated} updated, ${back.applied} changed in the sheet, ${back.append.length} sent to the sheet`;
     if (row) row.Value = v; else db.Settings.push({ Key: 'last_form_sync', Value: v, 'What it does': 'Set automatically by the Google Sheet sync' });
   });
-  (async () => { for (const id of added) await locate(id); })().catch(() => {});
-  res.json({ ok: true, rows: parsed.rows.length, added: added.length, updated, applied: back.applied, columns: TRACKER_COLUMNS, statuses: STATUS.care, write: back.write, append: back.append });
+  (async () => { for (const id of [...added, ...back.moved]) await locate(id); })().catch(() => {});
+  res.json({ ok: true, rows: parsed.rows.length, added: added.length, updated, applied: back.applied, columns: TRACKER_COLUMNS, statuses: STATUS.care, write: back.write, append: back.append, cells: back.cells });
 }));
 
 // Two-way part of the Google Sheet sync.
@@ -485,32 +487,64 @@ app.post('/api/form-sync', express.json({ limit: '10mb' }), wrap(async (req, res
 // 2. The site's current status, volunteer, pickup and delivery date are sent back
 //    for every row, so the sheet always shows where each request stands.
 // 3. Requests made on the website's own form are appended to the sheet.
+const splitRestrictions = (v) => clean(v).split(/\s*,\s*/).filter(Boolean);
 const forSheet = (v) => { const t = clean(v); return /^[=+\-@]/.test(t) ? "'" + t : t; };
 function sheetSync(parsed) {
   return store.mutate((db) => {
     const byId = new Map(db['Care Packages'].map((p) => [p.ID, p]));
     let applied = 0;
-    const write = [];
+    const write = [], cells = [], moved = [];
     const inSheet = new Set();
     for (const r of parsed.rows) {
       const p = byId.get(r.id);
       if (!p) continue;
       inSheet.add(p.ID);
       const t = r.tracker || {};
+      // "Tracker Edited" lists what someone changed in the sheet: tracker columns by name
+      // ("Status, Pickup") and form answer columns by number ("#9" = column I).
+      const edited = new Set(clean(t.Edited).split(/\s*,\s*/).filter(Boolean).map((x) => x.toLowerCase()));
+      const editedCols = new Set([...edited].filter((x) => /^#\d+$/.test(x)).map((x) => Number(x.slice(1)) - 1));
       if (t.Edited) {
         let changed = false;
         const set = (field, v) => { v = safe(v); if (v !== clean(p[field])) { p[field] = v; changed = true; } };
-        // "Tracker Edited" lists the columns someone changed, e.g. "Status, Pickup".
-        const edited = new Set(clean(t.Edited).split(/\s*,\s*/).map((x) => x.toLowerCase()));
+        // Answers edited in the sheet replace the site's copy (re-read from the whole row).
+        const fields = new Set([...editedCols].map((i) => r.cols && r.cols[i] && r.cols[i].field).filter(Boolean));
+        for (const f of fields) {
+          const field = f === 'Date Of Request' ? 'Submitted' : f;
+          if (!(field in r) || ['Status', 'Delivery Volunteer', 'Pickup Time', 'Printed', 'Connected'].includes(field)) continue;
+          const before = p[field];
+          set(field, r[field]);
+          if (field === 'Address' && before !== p.Address) { p.Zip = L.zipOf(p.Address); p.Lat = ''; p.Lng = ''; moved.push(p.ID); }
+          if (field === 'Housing') set('Restrictions', [...new Set([...splitRestrictions(p.Restrictions), ...splitRestrictions(L.suggestedRestrictions(p.Housing))])].join(', '));
+        }
+        for (const i of editedCols) {
+          if (!r.questions || !r.questions[i] || (r.cols[i] && r.cols[i].tracker)) continue;
+          const question = safe(r.questions[i]);
+          db['Form Answers'] = db['Form Answers'].filter((a) => !(a.ID === p.ID && a.Question === question));
+          const answer = clean(r.raw[i]);
+          if (answer) db['Form Answers'].push({ ID: p.ID, Question: question, Answer: safe(answer) });
+        }
         const was = (k) => k in t && edited.has(k.toLowerCase());
         const status = STATUS.care.find((x) => x.toLowerCase() === clean(t.Status).toLowerCase());
         if (was('Status') && status) set('Status', status);
-        if (was('Volunteer')) set('Delivery Volunteer', t.Volunteer);
+        if (was('Volunteer')) {
+          set('Delivery Volunteer', t.Volunteer);
+          if (p['Delivery Volunteer'] && ['New', 'Texted - No Response', 'Ready for Volunteer'].includes(p.Status) && !was('Status')) p.Status = 'Volunteer Assigned';
+          if (!p['Delivery Volunteer'] && p.Status === 'Volunteer Assigned' && !was('Status')) p.Status = L.CLAIMABLE;
+        }
         if (was('Pickup')) set('Pickup Time', t.Pickup);
         if (was('Delivered')) set('Delivered On', t.Delivered);
         if (changed) { p.Updated = L.nowStamp(); applied++; }
       }
       write.push({ row: r.sheetRow, edited: t.Edited || '', values: trackerValues(p) });
+      // Name, phone and address changed on the site go back into the form's own columns.
+      for (const field of ['Name', 'Phone', 'Address']) {
+        const idx = (r.cols || []).map((m, i) => (m && m.field === field && m.how === 'one' ? i : -1)).filter((i) => i >= 0);
+        if (!idx.length || idx.some((i) => editedCols.has(i))) continue;
+        const target = idx.find((i) => clean(r.raw[i])) ?? idx[0];
+        const site = clean(p[field]).replace(/^'/, '');
+        if (site && site !== clean(r.raw[target])) cells.push({ row: r.sheetRow, col: target + 1, edited: t.Edited || '', value: forSheet(site) });
+      }
     }
     // Website requests that aren't in the sheet yet, laid out under the form's own questions.
     const append = [];
@@ -531,7 +565,7 @@ function sheetSync(parsed) {
         if (used.has('Name') || used.has('Phone')) append.push(line);
       }
     }
-    return { applied, write, append };
+    return { applied, write, append, cells, moved };
   });
 }
 function trackerValues(p) {

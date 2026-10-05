@@ -45,7 +45,8 @@ The Google Form and the tracker stay in step both ways, through a small script i
 
 - **Form → tracker:** each new response appears on **Care packages** within seconds, with a catch-up every 5 minutes.
 - **Tracker → sheet:** every response gets *Tracker* columns at the right (ID, Status, Volunteer, Pickup, Delivered, Updated) showing where it stands on the site. Requests made on the site's own form are added to the bottom of the sheet.
-- **Sheet → tracker:** change *Tracker Status*, *Tracker Volunteer*, *Tracker Pickup* or *Tracker Delivered* in the sheet and the site picks it up on the next sync. Only the cells someone actually changed are sent (the script notes them in *Tracker Edited*), so a sheet edit never undoes a newer change made on the site.
+- **Sheet → tracker:** change *Tracker Status*, *Tracker Volunteer*, *Tracker Pickup*, *Tracker Delivered* or any answer (address, items, allergies…) in the sheet and the site picks it up on the next sync. Only the cells someone actually changed are sent (the script notes them in *Tracker Edited*), so a sheet edit never undoes a newer change made on the site.
+- **Name, phone and address** changed on the site are written back into the sheet's own answer columns.
 
 Re-sending is always safe: rows are matched by Tracker ID, or by phone number + request date, and never duplicated.
 

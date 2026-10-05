@@ -7,8 +7,10 @@
  *   (ID, Status, Volunteer, Pickup, Delivered, Updated) that show where the
  *   request stands on the website. Requests made on the website's own form are
  *   added to the bottom of the sheet.
- * Sheet → website: change Tracker Status, Tracker Volunteer, Tracker Pickup or
- *   Tracker Delivered in the sheet and the website picks it up on the next sync.
+ * Sheet → website: change Tracker Status, Tracker Volunteer, Tracker Pickup,
+ *   Tracker Delivered, or any answer (address, items...) in the sheet and the
+ *   website picks it up on the next sync. Name, phone and address changed on
+ *   the website are written back into the sheet.
  *
  * Re-sending is safe: rows are matched by Tracker ID, or by phone number +
  * request date, and are never duplicated.
@@ -66,7 +68,8 @@ function targetSheet() {
   return sheet;
 }
 
-// Marks which tracker columns a person changed, so only those go back to the website.
+// Marks which cells a person changed (tracker columns and form answers alike),
+// so only those go back to the website.
 function onEdit(e) {
   var sheet = e.range.getSheet();
   if (sheet.getSheetId() !== targetSheet().getSheetId() || e.range.getRow() === 1) return;
@@ -75,7 +78,9 @@ function onEdit(e) {
   if (!editedCol) return;
   var fields = [];
   for (var c = e.range.getColumn(); c <= e.range.getLastColumn(); c++) {
-    if (EDITABLE[head[c - 1]]) fields.push(EDITABLE[head[c - 1]]);
+    var h = head[c - 1];
+    if (EDITABLE[h]) fields.push(EDITABLE[h]);
+    else if (h && !/^Tracker /.test(h)) fields.push('#' + c); // a form answer, e.g. the address
   }
   if (!fields.length) return;
   for (var r = e.range.getRow(); r <= e.range.getLastRow(); r++) {
@@ -138,13 +143,19 @@ function writeBack(sheet, cols, r) {
       range.setNumberFormat('@');
       block[h] = { range: range, values: range.getDisplayValues() };
     });
-    var edited = block['Tracker Edited'].values;
+    var edited = block['Tracker Edited'].values.map(function (v) { return v[0]; }); // as it is now, before we write
     r.write.forEach(function (w) {
       var i = w.row - 2;
       if (i < 0 || i >= last - 1) return;
       // Someone edited this row while the sync was running: keep their change for next time.
-      if (edited[i][0] !== w.edited) return;
+      if (edited[i] !== w.edited) return;
       TRACKER_COLUMNS.forEach(function (h, k) { block[h].values[i][0] = w.values[k]; });
+    });
+    // Name, phone or address changed on the website (skipped if someone edited the row meanwhile).
+    (r.cells || []).forEach(function (c) {
+      var i = c.row - 2;
+      if (i < 0 || i >= last - 1 || edited[i] !== c.edited) return;
+      sheet.getRange(c.row, c.col).setValue(c.value);
     });
     TRACKER_COLUMNS.forEach(function (h) { block[h].range.setValues(block[h].values); });
   }

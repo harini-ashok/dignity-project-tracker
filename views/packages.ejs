@@ -31,7 +31,10 @@
     <td><%= p.Phone %></td><td><%= p.Zip %><% if (!p.Lat) { %> <span class="tag" title="Not on the map yet">no pin</span><% } %></td>
     <td><%= p.Language %></td>
     <td class="small"><%= (p.Needs || '').replace(/;/g, ' ·') %></td>
-    <td><%= p['Delivery Volunteer'] %></td><td class="small"><%= p['Pickup Time'] %></td>
+    <td><select class="cell-select" data-field="Delivery Volunteer" aria-label="Delivery volunteer for <%= p.ID %>">
+      <option value="">—</option>
+      <% for (const v of new Set([...volunteers, p['Delivery Volunteer']].filter(Boolean))) { %><option <%= v === p['Delivery Volunteer'] ? 'selected' : '' %>><%= v %></option><% } %>
+    </select></td><td class="small"><%= p['Pickup Time'] %></td>
     <td><input type="checkbox" class="toggle" data-field="Printed" aria-label="Label printed" <%= p.Printed === 'Yes' ? 'checked' : '' %>></td>
     <td><input type="checkbox" class="toggle" data-field="Connected" aria-label="Group chat connected" <%= p.Connected === 'Yes' ? 'checked' : '' %>></td>
     <td class="nowrap"><% if (p.Phone && texts[p.ID]) { %><a class="btn wa small" target="_blank" href="<%= L.waLink(p.Phone, texts[p.ID]) %>" title="<%= texts[p.ID] %>">Text</a> <% } %><a class="btn small" href="/labels?id=<%= encodeURIComponent(p.ID) %>" target="_blank">Label</a></td>
@@ -70,11 +73,12 @@ async function save(el) {
     sel.className = 'pill-select pill s-' + j.Status.toLowerCase().replace(/[^a-z]/g, '-');
     row.querySelector('[data-field=Printed]').checked = j.Printed === 'Yes';
     row.querySelector('[data-field=Connected]').checked = j.Connected === 'Yes';
-    toast(id + ' saved' + (field === 'Status' ? ': ' + j.Status : ''));
+    row.querySelector('[data-field="Delivery Volunteer"]').value = j['Delivery Volunteer'] || '';
+    toast(id + ' saved' + (field === 'Status' ? ': ' + j.Status : field === 'Delivery Volunteer' ? ': ' + (value || 'no volunteer') + ' · ' + j.Status : ''));
   } catch (e) {
     toast('Could not save ' + id + '. Refresh and try again.', true);
   } finally { el.disabled = false; }
 }
-document.querySelectorAll('.pill-select, .toggle').forEach((el) => el.addEventListener('change', () => save(el)));
+document.querySelectorAll('.pill-select, .toggle, .cell-select').forEach((el) => el.addEventListener('change', () => save(el)));
 </script>
 <%- include('partials/footer') %>
