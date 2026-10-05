@@ -1,5 +1,5 @@
 <%- include('partials/header', { head: '<link rel="stylesheet" href="/vendor/leaflet/leaflet.css">' }) %>
-<% const colors = ['#e0245e','#1f6fb2','#17a2b8','#4c9a2a','#e8771a','#7b3fa0','#e0a800','#138a8a','#c0392b','#2f5233']; %>
+<% const colors = ['#e0245e','#1f6fb2','#17a2b8','#4c9a2a','#e8771a','#7b3fa0','#e0a800','#138a8a','#c0392b','#5446cf']; %>
 <div class="spread noprint">
   <div><h1>Delivery map</h1>
   <p class="muted">Pick a numbered delivery you can do. Exact addresses and phone numbers show once it's yours.</p></div>
@@ -59,7 +59,7 @@
     L.marker([p.lat, p.lng], { icon }).addTo(map).on('click', () => {
       const el = document.getElementById('pin-' + p.n);
       el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      el.style.background = '#fdeedd'; setTimeout(() => (el.style.background = ''), 1500);
+      el.style.background = '#ecebfb'; setTimeout(() => (el.style.background = ''), 1500);
     });
     bounds.push([p.lat, p.lng]);
   }
