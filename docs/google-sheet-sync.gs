@@ -19,7 +19,7 @@
  *  3. Project Settings (gear) → Script properties → add:
  *       TRACKER_URL  = the tracker's address, e.g. https://tracker.citrixtek.com
  *       SYNC_SECRET  = the same value as FORM_SYNC_SECRET on the tracker
- *       SHEET_NAME   = (optional) tab to sync; defaults to the first tab
+ *       SHEET_NAME   = (optional) tab to sync; defaults to the form's responses tab
  *  4. Back in the editor choose the "setup" function and press Run.
  *     Approve the permissions Google asks for.
  * After that the sheet has a "Tracker" menu with "Sync now".
@@ -49,6 +49,10 @@ function onOpen() {
 
 function syncNowWithAlert() {
   var r = syncNow();
+  if (!r.rows) {
+    SpreadsheetApp.getUi().alert('No responses found on the tab "' + targetSheet().getName() + '". Set SHEET_NAME in Project Settings → Script properties to the tab with the form responses.');
+    return;
+  }
   SpreadsheetApp.getUi().alert('Synced ' + r.rows + ' responses: ' + r.added + ' new on the website, ' +
     r.applied + ' changes from this sheet applied, ' + r.append.length + ' website requests added here.');
 }
@@ -56,7 +60,8 @@ function syncNowWithAlert() {
 function targetSheet() {
   var name = PropertiesService.getScriptProperties().getProperty('SHEET_NAME');
   var ss = SpreadsheetApp.getActive();
-  var sheet = name ? ss.getSheetByName(name) : ss.getSheets()[0];
+  var sheet = name ? ss.getSheetByName(name)
+    : ss.getSheets().filter(function (s) { return s.getFormUrl(); })[0] || ss.getSheets()[0];
   if (!sheet) throw new Error('No tab named ' + name);
   return sheet;
 }
@@ -206,7 +211,9 @@ function createSampleForm() {
   // The form's answers land in a new tab; sync that one.
   SpreadsheetApp.flush();
   Utilities.sleep(3000);
-  var tab = ss.getSheets().filter(function (s) { return s.getFormUrl() && s.getFormUrl().indexOf(form.getId()) >= 0; })[0];
+  var tab = ss.getSheets().filter(function (s) {
+    try { return s.getFormUrl() && FormApp.openByUrl(s.getFormUrl()).getId() === form.getId(); } catch (e) { return false; }
+  })[0];
   var props = PropertiesService.getScriptProperties();
   if (tab) props.setProperty('SHEET_NAME', tab.getName());
   var msg = 'Sample form created: ' + form.getPublishedUrl() + '\n\nEdit it here: ' + form.getEditUrl();
