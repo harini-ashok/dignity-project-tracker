@@ -1,0 +1,32 @@
+<%- include('partials/header') %>
+<section class="card" style="max-width:760px;margin:20px auto">
+  <h1>Request a care package <span class="muted" style="font-weight:400">/ Solicitar un paquete</span></h1>
+  <p class="muted">Phoenix Dignity Project delivers essentials and non-perishable food. We'll text you when a volunteer is on the way.</p>
+  <form method="post" action="/request" class="stack">
+    <%- include('partials/csrf') %>
+    <div class="fields"><label>First name / Nombre<input name="name" required></label><label>Phone / Teléfono<input name="phone" type="tel" required></label>
+      <label>Language / Idioma<select name="language"><option>English</option><option>Español</option><option>Arabic</option><option>Other</option></select></label></div>
+    <label>How would you like to receive it? / ¿Cómo lo quiere recibir?<select name="receive_by"><option>Delivery</option><option>Pickup at Tempe Feed (Tuesdays)</option></select></label>
+    <label>Full address (with apartment, city, zip) / Dirección completa<input name="address" required></label>
+    <div class="fields"><label>Household size / Tamaño del hogar<input name="household" type="number" min="1" value="1"></label><label>Children / Niños<input name="children" type="number" min="0" value="0"></label>
+      <label>Housing / Vivienda<select name="housing"><option>House/apartment</option><option>Shelter</option><option>Recovery or sober living home</option><option>Unhoused/street</option><option>Other</option></select></label></div>
+    <div><label>How much do you need each? / ¿Qué necesita más?</label>
+      <% for (const k of ['Hygiene Items', 'Cleaning Supplies', 'Food', 'Clothing']) { %>
+        <div class="row small" style="margin-top:4px"><span style="width:140px"><%= k %></span>
+        <% for (const pr of ['High', 'Medium', 'Low']) { %><label style="font-weight:400" class="row"><input type="radio" name="need_<%= k %>" value="<%= pr %>"><%= pr %></label><% } %></div>
+      <% } %></div>
+    <div><label>Items you'd like / Artículos</label><div class="checks" style="margin-top:4px">
+      <% for (const it of ['Toothpaste', 'Toothbrush', 'Soap', 'Shampoo', 'Deodorant', 'Pads/Tampons', 'Razors', 'Toilet paper', 'Laundry soap', 'Dish soap', 'Socks', 'Underwear', 'Diapers', 'Wipes', 'Rice', 'Beans', 'Pasta', 'Canned vegetables', 'Canned meat', 'Cereal', 'Peanut butter', 'Snacks']) { %>
+        <label><input type="checkbox" name="items" value="<%= it %>"><%= it %></label><% } %></div>
+      <input name="items_other" placeholder="Anything else? / ¿Algo más?" style="margin-top:6px"></div>
+    <div><label>Rules where you stay / Reglas donde vive</label><div class="checks">
+      <label><input type="checkbox" name="restrictions" value="No alcohol">No alcohol-based products</label>
+      <label><input type="checkbox" name="restrictions" value="No aerosol">No aerosols / sprays</label></div></div>
+    <div class="fields"><label>Allergies / Alergias<input name="allergies" placeholder="e.g. peanuts"></label><label>Foods you won't eat<input name="dislikes"></label></div>
+    <label>Clothing / shoe sizes needed / Tallas<textarea name="clothing"></textarea></label>
+    <label>In your own words, how would a care package help? / En sus propias palabras<textarea name="story"></textarea></label>
+    <div class="fields"><label>Filled out by<select name="filled_by"><option value="Requester">Myself</option><option value="Volunteer">On behalf of someone else</option></select></label><label>Your name & organization (if for someone else)<input name="referral"></label></div>
+    <button class="primary">Send request / Enviar</button>
+  </form>
+</section>
+<%- include('partials/footer') %>

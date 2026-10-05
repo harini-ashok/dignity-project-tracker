@@ -1,0 +1,27 @@
+<%- include('partials/header') %>
+<h1>Excel workbook</h1>
+<div class="grid-2">
+<section class="card">
+  <h2 style="margin-top:0">The data lives in one Excel file</h2>
+  <p>Every page of this site reads and writes the same workbook, with one sheet each for Care Packages, Form Answers, Booth Requests, Inventory, Volunteers, Packing Shifts, Messages and Settings.</p>
+  <p><a class="btn primary" href="/workbook/download">Download the workbook</a></p>
+  <p class="small muted">To make big edits in Excel: download, edit, save, then upload it back below. Changes people make on the site while you're editing would be overwritten, so do it at a quiet time. A backup is kept every hour.</p>
+  <form method="post" action="/workbook/upload" enctype="multipart/form-data" class="stack">
+    <input type="hidden" name="_csrf" value="<%= csrf %>">
+    <input type="file" name="file" accept=".xlsx" required>
+    <button>Upload edited workbook</button>
+  </form>
+</section>
+<section class="card">
+  <h2 style="margin-top:0">Settings</h2>
+  <form method="post" action="/settings" class="stack">
+    <%- include('partials/csrf') %>
+    <% for (const [k, v] of Object.entries(settings)) { %>
+      <label><%= k.replace(/_/g, ' ') %><% if (k.startsWith('msg_')) { %><textarea name="s_<%= k %>"><%= v %></textarea><% } else { %><input name="s_<%= k %>" value="<%= v %>"><% } %></label>
+    <% } %>
+    <p class="small muted">In messages, {name} {volunteer} {volunteerPhone} {eta} {pickup} {address} {phone} {id} {hq} {org} {item} {date} are filled in automatically.</p>
+    <button class="primary">Save settings</button>
+  </form>
+</section>
+</div>
+<%- include('partials/footer') %>

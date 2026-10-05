@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title><%= title %> · <%= settings.org_name || 'Dignity Tracker' %></title>
+<link rel="stylesheet" href="/static/style.css">
+<% if (typeof head !== 'undefined') { %><%- head %><% } %>
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="/"><span class="dot"></span><%= settings.org_name || 'Dignity Tracker' %></a>
+  <% if (user) { %>
+  <input type="checkbox" id="navt" class="navt"><label for="navt" class="burger" aria-label="Menu">☰</label>
+  <nav>
+    <a href="/" class="<%= path === '/' ? 'on' : '' %>">Home</a>
+    <a href="/map" class="<%= path === '/map' ? 'on' : '' %>">Delivery map</a>
+    <a href="/shifts" class="<%= path === '/shifts' ? 'on' : '' %>">Packing</a>
+    <a href="/booth" class="<%= path === '/booth' ? 'on' : '' %>">Tempe Feed booth</a>
+    <a href="/inventory" class="<%= path === '/inventory' ? 'on' : '' %>">Inventory</a>
+    <% if (admin) { %>
+    <a href="/packages" class="<%= path.startsWith('/packages') ? 'on' : '' %>">Care packages</a>
+    <a href="/messages" class="<%= path === '/messages' ? 'on' : '' %>">Messages</a>
+    <a href="/volunteers" class="<%= path === '/volunteers' ? 'on' : '' %>">Volunteers</a>
+    <a href="/workbook" class="<%= path === '/workbook' ? 'on' : '' %>">Excel</a>
+    <% } %>
+    <a href="/me" class="<%= path === '/me' ? 'on' : '' %>"><%= user.Name %></a>
+    <form method="post" action="/logout" class="inline"><input type="hidden" name="_csrf" value="<%= csrf %>"><button class="link">Sign out</button></form>
+  </nav>
+  <% } %>
+</header>
+<main>
+<% if (flash) { %><div class="flash <%= flash.kind %>"><%= flash.msg %></div><% } %>

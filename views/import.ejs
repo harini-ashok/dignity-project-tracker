@@ -1,0 +1,31 @@
+<%- include('partials/header') %>
+<h1>Import Google Form responses</h1>
+<div class="grid-2">
+<section class="card">
+  <ol class="small">
+    <li>Open the form's response sheet in Google Sheets (or the Pending sheet).</li>
+    <li><b>File → Download → Microsoft Excel (.xlsx)</b> or <b>Comma-separated values (.csv)</b>.</li>
+    <li>Upload it here. Re-uploading the same sheet is safe: people already imported are matched by phone number and request date and only blank fields get filled in.</li>
+  </ol>
+  <form method="post" action="/import" enctype="multipart/form-data" class="stack">
+    <input type="hidden" name="_csrf" value="<%= csrf %>">
+    <input type="file" name="file" accept=".xlsx,.csv,.tsv" required>
+    <button class="primary">Import</button>
+  </form>
+  <p class="small muted">The STATUS, DELIVERY ASSIGNED TO, PICK UP DAY & TIME, PRINTED and CONNECTED columns from the coordinator's sheet are carried over too. Every answer is also saved in the "Form Answers" sheet so nothing is lost.</p>
+</section>
+<% if (result) { %>
+<section class="card">
+  <h2 style="margin-top:0">Done</h2>
+  <p><b><%= result.added %></b> new request(s) added, <b><%= result.updated %></b> existing updated, from <%= result.rows %> filled rows (repeats are merged).</p>
+  <p><a class="btn primary" href="/packages?status=New">Review new requests</a></p>
+  <details><summary>How the form questions were matched</summary>
+    <dl class="kv small" style="margin-top:8px">
+    <% for (const [f, hs] of Object.entries(result.mapping)) { %><dt><%= f %></dt><dd><%= hs.join(' · ') %></dd><% } %>
+    </dl>
+    <% if (result.unmatched.filter((u) => !/^Column \d+$/.test(u)).length) { %><p class="small muted">Kept only in Form Answers: <%= result.unmatched.filter((u) => !/^Column \d+$/.test(u)).join(' · ') %></p><% } %>
+  </details>
+</section>
+<% } %>
+</div>
+<%- include('partials/footer') %>

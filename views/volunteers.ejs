@@ -1,0 +1,27 @@
+<%- include('partials/header') %>
+<h1>Volunteers</h1>
+<div class="table-wrap card" style="padding:0"><table>
+<tr><th>Name</th><th>Phone</th><th>Role</th><th>Status</th><th>Active deliveries</th><th>Delivered</th><th></th></tr>
+<% for (const v of vols) { %>
+<tr><td><%= v.Name %></td><td><%= v.Phone %></td><td><%= v.Role %></td><td><%= v.Status %></td><td><%= v.load %></td><td><%= v.done %></td>
+<td class="row">
+  <% if (v.Status === 'Pending') { %><form method="post" action="/volunteers" class="inline"><%- include('partials/csrf') %><input type="hidden" name="id" value="<%= v.ID %>"><input type="hidden" name="action" value="status"><input type="hidden" name="to" value="Active"><button class="small primary">Approve</button></form><% } %>
+  <% if (v.ID !== user.ID) { %>
+  <form method="post" action="/volunteers" class="inline"><%- include('partials/csrf') %><input type="hidden" name="id" value="<%= v.ID %>"><input type="hidden" name="action" value="status"><input type="hidden" name="to" value="<%= v.Status === 'Inactive' ? 'Active' : 'Inactive' %>"><button class="small"><%= v.Status === 'Inactive' ? 'Reactivate' : 'Deactivate' %></button></form>
+  <form method="post" action="/volunteers" class="inline"><%- include('partials/csrf') %><input type="hidden" name="id" value="<%= v.ID %>"><input type="hidden" name="action" value="role"><button class="small"><%= v.Role === 'admin' ? 'Make volunteer' : 'Make coordinator' %></button></form><% } %>
+  <form method="post" action="/volunteers" class="inline row"><%- include('partials/csrf') %><input type="hidden" name="id" value="<%= v.ID %>"><input type="hidden" name="action" value="pin"><input name="pin" placeholder="new PIN" style="width:90px;margin:0"><button class="small">Set PIN</button></form>
+</td></tr>
+<% } %>
+</table></div>
+<section class="card" style="max-width:640px">
+  <h2 style="margin-top:0">Add a volunteer</h2>
+  <p class="small muted">Or share <b>/join</b> so volunteers sign themselves up, then approve them here.</p>
+  <form method="post" action="/volunteers" class="stack">
+    <%- include('partials/csrf') %><input type="hidden" name="action" value="add">
+    <div class="fields"><label>Name<input name="Name" required></label><label>Phone<input name="Phone" type="tel"></label></div>
+    <div class="fields"><label>Email<input name="Email" type="email"></label><label>Starting PIN<input name="pin" required minlength="4"></label>
+      <label>Role<select name="Role"><option value="volunteer">Volunteer</option><option value="admin">Coordinator</option></select></label></div>
+    <button class="primary">Add volunteer</button>
+  </form>
+</section>
+<%- include('partials/footer') %>
