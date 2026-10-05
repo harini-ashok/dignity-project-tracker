@@ -34,7 +34,7 @@
         <% for (const n of next.concat(r.Status === 'Picked Up' || r.Status === 'Cancelled' ? [] : ['Cancelled'])) { %>
           <form method="post" action="/booth/<%= r.ID %>" class="inline"><%- include('partials/csrf') %><input type="hidden" name="to" value="<%= n %>"><input type="hidden" name="day" value="<%= day %>"><button class="small <%= n === 'Cancelled' ? '' : 'primary' %>"><%= n === 'Cancelled' ? '✕' : n %></button></form>
         <% } %>
-        <% if (r.Phone && r.Status !== 'Requested') { %><a class="btn wa small" target="_blank" href="<%= L.waLink(r.Phone, texts[r.ID]) %>">Text</a><% } %>
+        <% if (admin && r.Phone && r.Status !== 'Requested') { %><a class="btn wa small" target="_blank" href="<%= L.waLink(r.Phone, texts[r.ID]) %>">Text</a><% } %>
       </div>
     </div>
   <% } %>

@@ -1,16 +1,21 @@
 <%- include('partials/header') %>
-<div class="spread"><h1>Messages</h1><a href="/messages<%= all ? '' : '?all=1' %>"><%= all ? 'Show only ready to send' : 'Show all' %></a></div>
-<p class="muted small"><%= auto ? 'Automatic texting is ON: messages are sent by SMS as soon as they are created.' : 'The app drafts these whenever a delivery is claimed, delivered, or a booth item is bought. Tap WhatsApp or Text to send from your phone, then mark it sent.' %></p>
-<% if (!msgs.length) { %><div class="card"><p class="muted">Nothing waiting to be sent.</p></div><% } %>
-<% for (const m of msgs) { %>
+<% const q = (extra) => '/messages?' + new URLSearchParams(Object.assign({ tab }, all ? { all: 1 } : {}, extra)).toString(); %>
+<div class="spread"><h1>Messages</h1><a href="/messages?tab=<%= tab %><%= all ? '' : '&all=1' %>"><%= all ? 'Show only ready to send' : 'Show all' %></a></div>
+<p class="muted small"><%= auto ? 'Automatic texting is ON: messages are sent by SMS as soon as they are created.' : 'The app drafts these when a delivery is claimed, picked up or delivered, or a booth item is bought. Tap WhatsApp or Text to send from your phone, then mark it sent.' %></p>
+<nav class="tabs">
+  <% for (const g of groups) { %><a href="<%= q({ tab: g.key }) %>" class="<%= g.key === tab ? 'on' : '' %>"><%= g.title %> <span class="count"><%= g.msgs.length %></span></a><% } %>
+</nav>
+<% const group = groups.find((g) => g.key === tab); %>
+<% if (!group.msgs.length) { %><div class="card"><p class="muted">Nothing waiting to be sent for <%= group.title.toLowerCase() %>.</p></div><% } %>
+<% for (const m of group.msgs) { %>
 <div class="card">
-  <div class="spread"><b><%= m.To %> · <%= m.Phone %></b><span class="small muted"><%= m.Time %> · <%= m.Ref %> · <%= m.Status %></span></div>
+  <div class="spread"><b><%= m.To %> · <%= m.Phone %></b><span class="small muted"><%= m.Time %> · <% if (/^CP-/.test(m.Ref)) { %><a href="/packages/<%= m.Ref %>"><%= m.Ref %></a><% } else { %><%= m.Ref %><% } %> · <%= m.Status %></span></div>
   <p style="white-space:pre-wrap"><%= m.Body %></p>
   <div class="row">
     <a class="btn wa small" target="_blank" href="<%= L.waLink(m.Phone, m.Body) %>">WhatsApp</a>
     <a class="btn small" href="<%= L.smsLink(m.Phone, m.Body) %>">Text</a>
     <% for (const to of ['Sent', 'Skipped']) { if (m.Status === to) continue; %>
-    <form method="post" action="/messages/<%= m.idx %>" class="inline"><%- include('partials/csrf') %><input type="hidden" name="to" value="<%= to %>"><% if (all) { %><input type="hidden" name="all" value="1"><% } %><button class="small <%= to === 'Sent' ? 'primary' : '' %>">Mark <%= to.toLowerCase() %></button></form>
+    <form method="post" action="/messages/<%= m.idx %>" class="inline"><%- include('partials/csrf') %><input type="hidden" name="to" value="<%= to %>"><input type="hidden" name="tab" value="<%= tab %>"><% if (all) { %><input type="hidden" name="all" value="1"><% } %><button class="small <%= to === 'Sent' ? 'primary' : '' %>">Mark <%= to.toLowerCase() %></button></form>
     <% } %>
   </div>
 </div>

@@ -130,7 +130,8 @@ test('volunteer signs up, gets approved, claims a delivery from the map', async 
   assert.strictEqual(p['Delivery Volunteer'], 'Vera Volunteer');
   const page = await vol.get('/packages/' + maria.ID);
   assert.match(page.text, /200 W Sample Rd/);
-  assert.match(page.text, /wa\.me\/16025550123/);
+  assert.doesNotMatch(page.text, /wa\.me\//, 'only coordinators send messages');
+  assert.match((await admin.get('/packages/' + maria.ID)).text, /wa\.me\/16025550123/);
 
   const msgs = await store.all('Messages');
   assert.strictEqual(msgs.length, 2);
@@ -280,6 +281,29 @@ test('google sheet sync is two-way', async () => {
   j = await post([head, ['10/1/2026 9:00:00', 'Two Way', '480-555-0190', ...tracked.slice(0, 6), ''], line]);
   assert.ok(!j.append.some((l) => l[3] === 'CP-9001'));
   assert.strictEqual(j.added, 0);
+});
+
+test('messages: per-status care texts, two groups, coordinators only', async () => {
+  const maria = (await store.all('Care Packages')).find((p) => p.Name.startsWith('Mar'));
+  // Picking up drafts an "on the way" text (Spanish for Spanish speakers).
+  await store.mutate((db) => { const p = db['Care Packages'].find((x) => x.ID === maria.ID); p.Status = 'Packed & Ready'; p['Delivered On'] = ''; });
+  await admin.get('/packages/' + maria.ID);
+  await admin.post(`/packages/${maria.ID}/step`, { to: 'Picked Up' });
+  const last = (await store.all('Messages')).at(-1);
+  assert.strictEqual(last.Ref, maria.ID);
+  assert.match(last.Body, /va en camino/);
+  // The list has a Text button with the message for the current status.
+  const list = (await admin.get('/packages')).text;
+  assert.match(list, new RegExp('title="Hola Mar[^"]*va en camino'));
+  // Messages are split into care packages and booth.
+  const care = (await admin.get('/messages?tab=care&all=1')).text;
+  const booth = (await admin.get('/messages?tab=booth&all=1')).text;
+  assert.match(care, /va en camino/);
+  assert.doesNotMatch(care, />BR-\d/);
+  assert.doesNotMatch(booth, /va en camino/);
+  // Volunteers can't open the outbox or see Text buttons on the booth board.
+  assert.strictEqual((await vol.get('/messages')).status, 403);
+  assert.doesNotMatch((await vol.get('/booth')).text, /wa\.me/);
 });
 
 test('sign-ins survive a restart', async () => {
