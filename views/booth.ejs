@@ -18,7 +18,7 @@
 </section>
 <section class="card">
   <h2 style="margin-top:0">How this board works</h2>
-  <p class="small">Requested → someone buys it (they press <b>Bought</b>, which drafts a text to the person) → it goes on the board at the booth (<b>At Booth</b>) → the person collects it (<b>Picked Up</b>). Anything not collected can be moved to another Tuesday.</p>
+  <p class="small">Requested → someone buys it (they press <b>Bought</b>, which drafts a text to the person) → it goes on the board at the booth (<b>At Booth</b>) → the person collects it (<b>Picked Up</b>). Use <b>←</b> to move an item back a step if it was moved by mistake. Anything not collected can be moved to another Tuesday.</p>
 </section>
 </div>
 <div class="board">
@@ -30,9 +30,11 @@
       <span class="small"><%= r.Name %> · <%= r.Phone %></span>
       <% if (r['Handled By']) { %><br><span class="small muted">Bought by <%= r['Handled By'] %></span><% } %>
       <div class="row" style="margin-top:6px">
+        <% const back = { Bought: 'Requested', 'At Booth': 'Bought', 'Picked Up': 'At Booth', Cancelled: 'Requested' }[r.Status]; %>
+        <% if (back) { %><form method="post" action="/booth/<%= r.ID %>" class="inline"><%- include('partials/csrf') %><input type="hidden" name="to" value="<%= back %>"><input type="hidden" name="day" value="<%= day %>"><button class="small" title="Move back to <%= back %>">← <%= r.Status === 'Cancelled' ? 'Restore' : back %></button></form><% } %>
         <% const next = { Requested: ['Bought'], Bought: ['At Booth'], 'At Booth': ['Picked Up'] }[r.Status] || []; %>
         <% for (const n of next.concat(r.Status === 'Picked Up' || r.Status === 'Cancelled' ? [] : ['Cancelled'])) { %>
-          <form method="post" action="/booth/<%= r.ID %>" class="inline"><%- include('partials/csrf') %><input type="hidden" name="to" value="<%= n %>"><input type="hidden" name="day" value="<%= day %>"><button class="small <%= n === 'Cancelled' ? '' : 'primary' %>"><%= n === 'Cancelled' ? '✕' : n %></button></form>
+          <form method="post" action="/booth/<%= r.ID %>" class="inline"><%- include('partials/csrf') %><input type="hidden" name="to" value="<%= n %>"><input type="hidden" name="day" value="<%= day %>"><button class="small <%= n === 'Cancelled' ? '' : 'primary' %>" title="<%= n === 'Cancelled' ? 'Cancel' : 'Move to ' + n %>"><%= n === 'Cancelled' ? '✕' : n + ' →' %></button></form>
         <% } %>
         <% if (admin && r.Phone && r.Status !== 'Requested') { %><a class="btn wa small" target="_blank" href="<%= L.waLink(r.Phone, texts[r.ID]) %>">Text</a><% } %>
       </div>
