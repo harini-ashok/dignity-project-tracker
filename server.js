@@ -602,36 +602,45 @@ app.post('/import', needLogin, needAdmin, upload.single('file'), checkUploadCsrf
 }));
 
 // ---------- Tempe Feed booth requests ----------
+// The board is organized by the date each request was entered. "All open" (the default)
+// shows everything still waiting, plus anything finished in the last week.
+const boothVars = (r, s) => ({ name: r.Name.split(' ')[0], item: r.Item, date: L.nextBoothDay(L.addDays(L.today(), -1), s.booth_day), org: s.org_name });
 app.get('/booth', needLogin, wrap(async (req, res) => {
   const rows = await store.all('Booth Requests');
   const s = res.locals.settings;
-  const day = req.query.day || L.nextBoothDay(L.today(), s.booth_day);
-  const days = [...new Set(rows.map((r) => r['Bring On']).filter(Boolean).concat(day))].sort().reverse();
-  const forDay = rows.filter((r) => (r['Bring On'] || '') === day);
-  const lanes = STATUS.booth.map((st) => ({ status: st, rows: forDay.filter((r) => r.Status === st) }));
-  const texts = Object.fromEntries(rows.map((r) => [r.ID, L.fill(s.msg_booth_ready, { name: r.Name.split(' ')[0], item: r.Item, date: r['Bring On'], org: s.org_name })]));
+  const day = /^\d{4}-\d{2}-\d{2}$/.test(req.query.day || '') ? req.query.day : '';
+  const days = [...new Set(rows.map((r) => String(r.Date || '').slice(0, 10)).filter(Boolean))].sort().reverse();
+  const weekAgo = L.addDays(L.today(), -7);
+  const shown = day ? rows.filter((r) => String(r.Date || '').slice(0, 10) === day)
+    : rows.filter((r) => ['Requested', 'Bought', 'At Booth'].includes(r.Status) || String(r.Updated || '').slice(0, 10) >= weekAgo);
+  const lanes = STATUS.booth.map((st) => ({ status: st, rows: shown.filter((r) => r.Status === st) }));
+  const texts = Object.fromEntries(rows.map((r) => [r.ID, L.fill(s.msg_booth_ready, boothVars(r, s))]));
   const holdWeeks = Number(s.booth_hold_weeks) || 5;
   const hold = Object.fromEntries(rows.map((r) => [r.ID, L.boothHold(r, holdWeeks)]));
   const expired = rows.filter((r) => hold[r.ID].expired);
-  res.render('booth', { title: 'Tempe Feed booth', lanes, day, days, nextDay: L.nextBoothDay(L.today(), s.booth_day), texts, hold, holdWeeks, expired });
+  res.render('booth', { title: 'Tempe Feed booth', lanes, day, days, texts, hold, holdWeeks, expired });
+}));
+// The board checks this every few seconds so everyone at the booth sees each other's changes.
+app.get('/booth/version', needLogin, wrap(async (req, res) => {
+  const rows = await store.all('Booth Requests');
+  res.json({ v: `${rows.length}|${rows.reduce((m, r) => (r.Updated > m ? r.Updated : m), '')}|${rows.map((r) => r.Status[0]).join('')}` });
 }));
 app.post('/booth', needLogin, wrap(async (req, res) => {
   const b = req.body;
   const items = [].concat(b.item || []).map(clean);
   const details = [].concat(b.details || []);
   if (!clean(b.name) || !items.some(Boolean)) { flash(req, 'Name and at least one item are needed.', 'err'); return res.redirect('/booth'); }
-  const day = clean(b.bring_on) || L.nextBoothDay(L.today(), res.locals.settings.booth_day);
   await store.mutate((db) => {
     items.forEach((item, i) => {
       if (!item) return;
       db['Booth Requests'].push({
         ID: nextId(db['Booth Requests'], 'Booth Requests'), Date: L.today(), Name: safe(b.name), Phone: safe(b.phone),
-        Item: safe(item), Details: safe(details[i]), Status: 'Requested', 'Bring On': day, 'Handled By': '', Notes: safe(b.notes), Updated: L.nowStamp(),
+        Item: safe(item), Details: safe(details[i]), Status: 'Requested', 'Bring On': '', 'Handled By': '', Notes: safe(b.notes), Updated: L.nowStamp(),
       });
     });
   });
-  flash(req, `Saved for ${clean(b.name)}. Items will be brought on ${day}.`);
-  res.redirect('/booth?day=' + day);
+  flash(req, `Saved for ${clean(b.name)} on ${L.today()}.`);
+  res.redirect('/booth');
 }));
 app.post('/booth/:id', needLogin, wrap(async (req, res) => {
   const to = req.body.to;
@@ -641,11 +650,10 @@ app.post('/booth/:id', needLogin, wrap(async (req, res) => {
     // Moving an item back and forward again doesn't draft a second "it's ready" text.
     if (to === 'Bought' && r.Status === 'Requested' && !db.Messages.some((m) => m.Ref === r.ID)) {
       const s = Object.fromEntries(db.Settings.map((x) => [x.Key, x.Value]));
-      await notify.queue(db, [{ ref: r.ID, to: r.Name, phone: r.Phone, body: L.fill(s.msg_booth_ready, { name: r.Name.split(' ')[0], item: r.Item, date: r['Bring On'], org: s.org_name }) }], req.user.Name);
+      await notify.queue(db, [{ ref: r.ID, to: r.Name, phone: r.Phone, body: L.fill(s.msg_booth_ready, boothVars(r, s)) }], req.user.Name);
       r['Handled By'] = req.user.Name;
     }
     r.Status = to;
-    if (req.body.bring_on) r['Bring On'] = safe(req.body.bring_on);
     r.Updated = L.nowStamp();
   });
   res.redirect('/booth?day=' + encodeURIComponent(req.body.day || ''));
