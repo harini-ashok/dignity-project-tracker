@@ -34,7 +34,7 @@ app.use('/static', express.static(path.join(__dirname, 'public')));
 app.use('/vendor/leaflet', express.static(path.join(__dirname, 'node_modules/leaflet/dist')));
 app.use(session({
   secret: sessionSecret(), resave: false, saveUninitialized: false,
-  cookie: { httpOnly: true, sameSite: 'lax', maxAge: 30 * 24 * 3600 * 1000 },
+  cookie: { httpOnly: true, sameSite: 'lax', secure: 'auto', maxAge: 30 * 24 * 3600 * 1000 },
 }));
 
 // ---------- helpers ----------

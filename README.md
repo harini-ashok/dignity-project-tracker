@@ -73,9 +73,32 @@ Tests: `npm test`.
 | `GEOCODER` | on | Addresses are placed on the map with OpenStreetMap's free geocoder. `off` to disable; Lat/Lng can also be typed in. |
 | `TZ` | America/Phoenix | |
 
-### Hosting
+### Hosting on Render (recommended)
 
-Any small Node host with a persistent disk works, for example Render (web service + 1 GB disk mounted at `DATA_DIR`) or Railway (service + volume), roughly $5–10/month. The workbook must sit on the persistent disk or it is lost on redeploy. Put the site behind HTTPS (both hosts do this automatically), since it holds people's addresses and phone numbers.
+The repo includes `render.yaml`, so setup is a few clicks:
+
+1. Create an account at [render.com](https://render.com) using **Sign in with GitHub** (the account that owns this repo) and add a payment card. The site needs the paid *Starter* plan because the free plan has no disk to keep the workbook on.
+2. **New → Blueprint**, choose `dignity-project-tracker`, and approve Render's access to the repo.
+3. Render asks for three values: `ADMIN_NAME` (the coordinator's name), `ADMIN_PHONE`, and `ADMIN_PIN` (her first PIN; she can change it after signing in). Press **Apply**.
+4. After the first deploy, open the `onrender.com` link, sign in, and change the PIN. Every push to `main` redeploys automatically; the workbook on the disk is kept.
+5. Optional: use your own address (for example `tracker.phoenixdignityproject.org`) under **Settings → Custom Domains**, and add the DNS record it shows wherever the domain is managed.
+
+To copy the workbook off the server at any time, use **Excel → Download the workbook** in the site. Render also snapshots disks daily.
+
+### Optional: automatic text messages (Twilio)
+
+Only needed if you want texts to go out without a person tapping send. WhatsApp one-tap buttons work without this.
+
+1. Sign up at [twilio.com](https://www.twilio.com) and upgrade from the trial (trial accounts can only text verified numbers).
+2. Buy a **toll-free number** and submit **Toll-Free Verification** with the nonprofit's details, website, and a sample message. US carriers block unverified numbers; approval usually takes a few days to a few weeks. (The alternative, A2P 10DLC registration, has extra brand/campaign fees.)
+3. Add an SMS consent line to the Google Form (for example "I agree to receive text messages about my care package from Phoenix Dignity Project. Reply STOP to opt out."). Carriers require proof of opt-in.
+4. In Render → **Environment**, add `SMS_PROVIDER=twilio`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` (both from the Twilio console) and `TWILIO_FROM` (the toll-free number, like `+18885551234`).
+
+Cost is a small monthly number fee plus about a cent per text; check Twilio's pricing page for current rates.
+
+### Other hosts
+
+Any Node host with a persistent disk works (Railway with a volume, a VPS, or a computer that stays on). Set `DATA_DIR` to a folder on that disk and serve it over HTTPS, since the site holds people's addresses and phone numbers.
 
 ## Privacy
 

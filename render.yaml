@@ -1,0 +1,28 @@
+# One-click hosting on Render: Dashboard → New → Blueprint → pick this repository.
+# The workbook lives on the attached disk so it survives restarts and redeploys.
+services:
+  - type: web
+    name: dignity-tracker
+    runtime: node
+    plan: starter
+    region: oregon
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /login
+    disk:
+      name: tracker-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: DATA_DIR
+        value: /var/data
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: ADMIN_NAME
+        sync: false
+      - key: ADMIN_PHONE
+        sync: false
+      - key: ADMIN_PIN
+        sync: false
