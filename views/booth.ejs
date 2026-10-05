@@ -1,7 +1,7 @@
 <%- include('partials/header') %>
 <div class="spread"><h1>Tempe Feed booth</h1>
-  <form method="get" class="row"><label class="row" style="font-weight:400">Booth day
-    <select name="day" onchange="this.form.submit()" style="width:auto"><% for (const d of days) { %><option <%= d === day ? 'selected' : '' %>><%= d %></option><% } %></select></label></form></div>
+  <form method="get" class="row"><label class="row" style="font-weight:400">Requested on
+    <select name="day" onchange="this.form.submit()" style="width:auto"><option value="">All open</option><% for (const d of days) { %><option <%= d === day ? 'selected' : '' %>><%= d %></option><% } %></select></label></form></div>
 <div class="grid-2">
 <section class="card">
   <h2 style="margin-top:0">New request at the booth</h2>
@@ -12,7 +12,7 @@
       <div class="fields"><label>Item<input name="item" placeholder="e.g. Shoes" required></label><label>Size / details<input name="details" placeholder="e.g. men's 10, black"></label></div>
     </div>
     <button type="button" class="small" onclick="const d=document.querySelector('#items .fields').cloneNode(true);d.querySelectorAll('input').forEach(i=>{i.value='';i.required=false});document.getElementById('items').appendChild(d)">+ another item</button>
-    <div class="fields"><label>Bring it on<input type="date" name="bring_on" value="<%= nextDay %>"></label><label>Notes<input name="notes"></label></div>
+    <label>Notes<input name="notes"></label>
     <button class="primary">Save request</button>
   </form>
 </section>
@@ -41,6 +41,7 @@
       <% if (hold[r.ID].expired) { %><span class="tag">⚠ Over <%= holdWeeks %> weeks, cancel?</span><% } else if (r.Status === 'At Booth') { %><span class="tag ok">Week <%= Math.min(hold[r.ID].weeks + 1, holdWeeks) %> of <%= holdWeeks %></span><% } %>
       <b><%= r.Item %></b><% if (r.Details) { %><span class="small"><%= r.Details %></span><br><% } %>
       <span class="small"><%= r.Name %> · <%= r.Phone %></span>
+      <br><span class="small muted">Requested <%= String(r.Date || '').slice(0, 10) %></span>
       <% if (r['Handled By']) { %><br><span class="small muted">Bought by <%= r['Handled By'] %></span><% } %>
       <div class="row" style="margin-top:6px">
         <% const back = { Bought: 'Requested', 'At Booth': 'Bought', 'Picked Up': 'At Booth', Cancelled: 'Requested' }[r.Status]; %>

@@ -166,37 +166,38 @@ test('packing takes items out of inventory once; delivery drafts thank-you', asy
 
 test('Tempe Feed booth: request, buy, board', async () => {
   await vol.get('/booth');
-  await vol.post('/booth', { name: 'Booth Person', phone: '4805550144', item: ['Shoes', 'Jacket'], details: ["men's 10", 'L'], bring_on: '2026-10-13' });
+  await vol.post('/booth', { name: 'Booth Person', phone: '4805550144', item: ['Shoes', 'Jacket'], details: ["men's 10", 'L'] });
   const rows = await store.all('Booth Requests');
   assert.strictEqual(rows.length, 2);
-  assert.strictEqual(rows[0]['Bring On'], '2026-10-13');
-  await vol.get('/booth?day=2026-10-13');
-  await vol.post(`/booth/${rows[0].ID}`, { to: 'Bought', day: '2026-10-13' });
+  assert.strictEqual(rows[0].Date, new Date().toLocaleDateString('en-CA'), 'tracked by the day it was entered');
+  assert.match((await vol.get('/booth')).text, new RegExp('Requested ' + rows[0].Date));
+  await vol.get('/booth');
+  await vol.post(`/booth/${rows[0].ID}`, { to: 'Bought', day: '' });
   assert.strictEqual((await store.all('Booth Requests'))[0].Status, 'Bought');
-  assert.match((await store.all('Messages')).at(-1).Body, /Shoes you asked for at Tempe Feed .* on 2026-10-13/);
-  assert.match((await vol.get('/booth?day=2026-10-13')).text, /Jacket/);
+  assert.match((await store.all('Messages')).at(-1).Body, /Shoes you asked for at Tempe Feed .* on \d{4}-\d{2}-\d{2}\./);
+  assert.match((await vol.get('/booth')).text, /Jacket/);
 
   // Items can move back a step and forward again without a second text.
   const texts = (await store.all('Messages')).length;
-  await vol.post(`/booth/${rows[0].ID}`, { to: 'Requested', day: '2026-10-13' });
+  await vol.post(`/booth/${rows[0].ID}`, { to: 'Requested', day: '' });
   assert.strictEqual((await store.all('Booth Requests'))[0].Status, 'Requested');
-  assert.match((await vol.get('/booth?day=2026-10-13')).text, /← Bought|Bought →/);
-  await vol.post(`/booth/${rows[0].ID}`, { to: 'Bought', day: '2026-10-13' });
-  await vol.post(`/booth/${rows[0].ID}`, { to: 'At Booth', day: '2026-10-13' });
-  assert.match((await vol.get('/booth?day=2026-10-13')).text, /← Bought/);
-  await vol.post(`/booth/${rows[0].ID}`, { to: 'Bought', day: '2026-10-13' });
+  assert.match((await vol.get('/booth')).text, /← Bought|Bought →/);
+  await vol.post(`/booth/${rows[0].ID}`, { to: 'Bought', day: '' });
+  await vol.post(`/booth/${rows[0].ID}`, { to: 'At Booth', day: '' });
+  assert.match((await vol.get('/booth')).text, /← Bought/);
+  await vol.post(`/booth/${rows[0].ID}`, { to: 'Bought', day: '' });
   assert.strictEqual((await store.all('Booth Requests'))[0].Status, 'Bought');
   assert.strictEqual((await store.all('Messages')).length, texts, 'no duplicate text');
 
   // Items left at the booth more than 5 weeks after the request get flagged for cancelling.
   const sixWeeksAgo = new Date(Date.now() - 43 * 86400000).toISOString().slice(0, 10);
   await store.mutate((db) => { const r = db['Booth Requests'].find((x) => x.ID === rows[1].ID); r.Date = sixWeeksAgo; r.Status = 'At Booth'; db['Booth Requests'].find((x) => x.ID === rows[0].ID).Status = 'At Booth'; });
-  let page = (await vol.get('/booth?day=2026-10-13')).text;
+  let page = (await vol.get('/booth')).text;
   assert.match(page, /1 item has waited at the booth more than 5 weeks/);
   assert.match(page, /Over 5 weeks, cancel\?/);
   assert.match(page, /Week 1 of 5/, 'a fresh item at the booth shows its week instead');
-  await vol.post(`/booth/${rows[1].ID}`, { to: 'Cancelled', day: '2026-10-13' });
-  page = (await vol.get('/booth?day=2026-10-13')).text;
+  await vol.post(`/booth/${rows[1].ID}`, { to: 'Cancelled', day: '' });
+  page = (await vol.get('/booth')).text;
   assert.doesNotMatch(page, /waited at the booth more than/);
 });
 
@@ -205,12 +206,12 @@ test('booth: many volunteers saving requests at the same moment lose nothing', a
   const people = [vol, admin, client()];
   await people[2].login('Sam Coordinator', '4321');
   await Promise.all(people.map((c) => c.get('/booth')));
-  await Promise.all(Array.from({ length: 15 }, (_, i) => people[i % 3].post('/booth', { name: `Rush ${i}`, item: ['Socks', 'Hat'], bring_on: '2026-10-20' })));
+  await Promise.all(Array.from({ length: 15 }, (_, i) => people[i % 3].post('/booth', { name: `Rush ${i}`, item: ['Socks', 'Hat'] })));
   const rows = await store.all('Booth Requests');
   assert.strictEqual(rows.length, before + 30);
   assert.strictEqual(new Set(rows.map((r) => r.ID)).size, rows.length, 'every request got its own ID');
   const v1 = (await (await vol.get('/booth/version')).res.json()).v;
-  await admin.post('/booth', { name: 'One more', item: 'Gloves', bring_on: '2026-10-20' });
+  await admin.post('/booth', { name: 'One more', item: 'Gloves' });
   assert.notStrictEqual((await (await vol.get('/booth/version')).res.json()).v, v1, 'the board notices new requests');
 });
 
