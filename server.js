@@ -477,7 +477,9 @@ app.post('/api/form-sync', express.json({ limit: '10mb' }), wrap(async (req, res
     const v = `${L.nowStamp()} · ${added.length} new, ${updated} updated, ${back.applied} changed in the sheet, ${back.append.length} sent to the sheet`;
     if (row) row.Value = v; else db.Settings.push({ Key: 'last_form_sync', Value: v, 'What it does': 'Set automatically by the Google Sheet sync' });
   });
-  (async () => { for (const id of [...added, ...back.moved]) await locate(id); })().catch(() => {});
+  // Place new and moved addresses on the map, and retry any earlier ones that didn't place.
+  const unplaced = (await store.all('Care Packages')).filter((p) => !p.Lat && p.Address && !['Delivered', 'Cancelled'].includes(p.Status)).map((p) => p.ID);
+  (async () => { for (const id of [...new Set([...added, ...back.moved, ...unplaced])].slice(0, 25)) await locate(id); })().catch(() => {});
   res.json({ ok: true, rows: parsed.rows.length, added: added.length, updated, applied: back.applied, columns: TRACKER_COLUMNS, statuses: STATUS.care, write: back.write, append: back.append, cells: back.cells });
 }));
 

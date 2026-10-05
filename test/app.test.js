@@ -135,7 +135,7 @@ test('volunteer signs up, gets approved, claims a delivery from the map', async 
 
   const msgs = await store.all('Messages');
   assert.strictEqual(msgs.length, 2);
-  assert.match(msgs[0].Body, /^Hola María, le saluda Phoenix Dignity Project\. Vera Volunteer/, 'Spanish template for Spanish speakers');
+  assert.match(msgs[0].Body, /^¡Hola María! Le presento a Vera Volunteer, quien le entregará su paquete :-\) Lo entregará en: 200 W Sample Rd/, 'Spanish template for Spanish speakers');
   assert.match(msgs[1].Body, /Thank you Vera Volunteer/);
 
   // A second volunteer can't take it.
@@ -334,4 +334,25 @@ test('sign-ins survive a restart', async () => {
   const { FileStore } = require('../lib/session-store');
   const reloaded = new FileStore(file);
   assert.ok(Object.values(reloaded.data).some((s) => s.uid), 'a signed-in session was written to disk');
+});
+
+test('geocoder tries the Census lookup first, then OpenStreetMap', async () => {
+  const { geocode } = require('../lib/geo');
+  const realFetch = global.fetch;
+  const asked = [];
+  process.env.GEOCODER = 'on';
+  try {
+    global.fetch = async (url) => {
+      asked.push(new URL(url).host);
+      const census = url.includes('census.gov');
+      return { ok: true, json: async () => (census ? { result: { addressMatches: url.includes('Known') ? [{ coordinates: { x: -111.9, y: 33.42 } }] : [] } } : [{ lat: '33.5', lon: '-112.0' }]) };
+    };
+    assert.deepStrictEqual(await geocode('1 Known St, Tempe, AZ'), { lat: '33.42000', lng: '-111.90000' });
+    assert.deepStrictEqual(asked, ['geocoding.geo.census.gov']);
+    assert.deepStrictEqual(await geocode('2 Other St, Tempe, AZ'), { lat: '33.50000', lng: '-112.00000' });
+    assert.deepStrictEqual(asked.slice(1), ['geocoding.geo.census.gov', 'nominatim.openstreetmap.org']);
+  } finally {
+    global.fetch = realFetch;
+    process.env.GEOCODER = 'off';
+  }
 });
