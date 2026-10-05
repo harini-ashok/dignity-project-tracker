@@ -410,3 +410,18 @@ test('geocoder tries the Census lookup first, then OpenStreetMap', async () => {
     process.env.GEOCODER = 'off';
   }
 });
+
+test('map shows "I\'ll deliver this" on unassigned packages; coordinators can claim ones still in review', async () => {
+  const alex = (await store.all('Care Packages')).find((p) => p.Name === 'Alex Testcase');
+  await store.mutate((db) => { const p = db['Care Packages'].find((x) => x.ID === alex.ID); p.Status = 'New'; p['Delivery Volunteer'] = ''; });
+  assert.doesNotMatch((await vol.get('/map')).text, new RegExp(`/packages/${alex.ID}/claim`), 'volunteers only see open deliveries');
+  await vol.post(`/packages/${alex.ID}/claim`, { pickup: 'x', eta: 'y' });
+  assert.strictEqual((await pkg(alex.ID))['Delivery Volunteer'], '');
+
+  assert.match((await admin.get('/map')).text, new RegExp(`/packages/${alex.ID}/claim[\\s\\S]*?I'll deliver this|I'll deliver this[\\s\\S]*?/packages/${alex.ID}/claim`));
+  const r = await admin.post(`/packages/${alex.ID}/claim`, { pickup: 'Sun 9am', eta: 'Sun 10am' });
+  assert.strictEqual(r.location, '/packages/' + alex.ID);
+  const p = await pkg(alex.ID);
+  assert.strictEqual(p.Status, 'Volunteer Assigned');
+  assert.strictEqual(p['Delivery Volunteer'], 'Sam Coordinator');
+});

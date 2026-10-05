@@ -165,6 +165,11 @@ app.get('/', needLogin, wrap(async (req, res) => {
 }));
 
 // ---------- map: volunteers pick deliveries ----------
+// A delivery can be claimed while nobody is on it. Volunteers see Ready for Volunteer (and
+// packed or assigned-but-unnamed ones); coordinators can also take requests still being reviewed.
+const canClaim = (p, admin) => !p['Delivery Volunteer'] &&
+  ([L.CLAIMABLE, 'Volunteer Assigned', 'Packed & Ready'].includes(p.Status) || (admin && ['New', 'Texted - No Response', 'Too Early to Pack'].includes(p.Status)));
+
 app.get('/map', needLogin, wrap(async (req, res) => {
   const pk = await store.all('Care Packages');
   const s = res.locals.settings;
@@ -180,7 +185,7 @@ app.get('/map', needLogin, wrap(async (req, res) => {
     const pin = pins.get(key);
     if (p.Lat && p.Lng) { pin.lat = mineOrAdmin ? Number(p.Lat) : L.fuzz(p.Lat); pin.lng = mineOrAdmin ? Number(p.Lng) : L.fuzz(p.Lng); }
     pin.packages.push({
-      id: p.ID, status: p.Status, open: p.Status === L.CLAIMABLE,
+      id: p.ID, status: p.Status, open: canClaim(p, admin),
       name: mineOrAdmin ? p.Name : L.english(p.Name).split(' ')[0],
       address: mineOrAdmin ? p.Address : '',
       household: p.Household.match(/household size:\s*(\d+)/i)?.[1] || '',
@@ -200,9 +205,9 @@ app.post('/packages/:id/claim', needLogin, wrap(async (req, res) => {
   const result = await store.mutate(async (db) => {
     const p = db['Care Packages'].find((x) => x.ID === req.params.id);
     if (!p) return 'missing';
-    if (p.Status !== L.CLAIMABLE || p['Delivery Volunteer']) return 'taken';
+    if (!canClaim(p, isAdmin(req.user))) return 'taken';
     p['Delivery Volunteer'] = req.user.Name;
-    p.Status = 'Volunteer Assigned';
+    if (p.Status !== 'Packed & Ready') p.Status = 'Volunteer Assigned';
     p['Pickup Time'] = safe(req.body.pickup);
     p['Est. Delivery'] = safe(req.body.eta);
     p.Updated = L.nowStamp();
