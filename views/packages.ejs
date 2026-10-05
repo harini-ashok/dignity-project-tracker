@@ -9,31 +9,72 @@
   <input name="q" value="<%= q %>" placeholder="Search name, phone, zip, item…" style="max-width:300px">
   <button>Filter</button>
 </form>
-<form method="post" action="/packages-bulk">
+<form method="post" action="/packages-bulk" id="bulk" class="bulk" hidden>
   <%- include('partials/csrf') %>
-  <div class="row" style="margin-bottom:8px">
-    <span class="muted small">With selected:</span>
-    <select name="to" style="max-width:220px">
-      <option value="labels">Print labels</option><option value="printed">Mark printed</option>
-      <% for (const s of statuses) { %><option value="<%= s %>">Set status: <%= s %></option><% } %>
-    </select><button>Apply</button>
-  </div>
-  <div class="table-wrap"><table>
-    <tr><th><input type="checkbox" onclick="document.querySelectorAll('.pick').forEach(c=>c.checked=this.checked)"></th><th>ID</th><th>Status</th><th>Name</th><th>Phone</th><th>Zip</th><th>Lang</th><th>Needs</th><th>Volunteer</th><th>Pickup</th><th>Printed</th><th>Connected</th></tr>
-    <% for (const p of pk) { %>
-    <tr>
-      <td><input type="checkbox" class="pick" name="id" value="<%= p.ID %>"></td>
-      <td><a href="/packages/<%= p.ID %>"><%= p.ID %></a></td>
-      <td><%- include('partials/pill', { s: p.Status }) %></td>
-      <td><%= p.Name %><% if (/^pickup/i.test(p['Receive By'])) { %> <span class="tag ok">pickup</span><% } %></td>
-      <td><%= p.Phone %></td><td><%= p.Zip %><% if (!p.Lat) { %> <span class="tag" title="Not on the map yet">no pin</span><% } %></td>
-      <td><%= p.Language %></td>
-      <td class="small"><%= (p.Needs || '').replace(/;/g, ' ·') %></td>
-      <td><%= p['Delivery Volunteer'] %></td><td class="small"><%= p['Pickup Time'] %></td>
-      <td><%= p.Printed %></td><td><%= p.Connected %></td>
-    </tr>
-    <% } %>
-  </table></div>
-  <% if (!pk.length) { %><p class="muted">Nothing here yet. New Google Form responses will appear here automatically.</p><% } %>
+  <b id="bulk-count">0 selected</b>
+  <select name="to" style="max-width:240px">
+    <option value="labels">Print labels</option><option value="printed">Mark printed</option>
+    <% for (const s of statuses) { %><option value="<%= s %>">Set status: <%= s %></option><% } %>
+  </select><button class="primary">Apply</button>
+  <button type="button" class="link" onclick="document.querySelectorAll('.pick, #pick-all').forEach(c => c.checked = false); bulkBar()">Clear</button>
 </form>
+<div class="table-wrap"><table class="rows">
+  <tr><th><input type="checkbox" id="pick-all" title="Select all" onclick="document.querySelectorAll('.pick').forEach(c => c.checked = this.checked); bulkBar()"></th><th>ID</th><th>Status</th><th>Name</th><th>Phone</th><th>Zip</th><th>Lang</th><th>Needs</th><th>Volunteer</th><th>Pickup</th><th>Printed</th><th>Connected</th><th></th></tr>
+  <% for (const p of pk) { %>
+  <tr data-id="<%= p.ID %>">
+    <td><input type="checkbox" class="pick" form="bulk" name="id" value="<%= p.ID %>" onchange="bulkBar()"></td>
+    <td><a href="/packages/<%= p.ID %>"><%= p.ID %></a></td>
+    <td><select class="pill-select pill s-<%= String(p.Status || '').toLowerCase().replace(/[^a-z]/g, '-') %>" data-field="Status" aria-label="Status of <%= p.ID %>">
+      <% for (const s of statuses) { %><option <%= s === p.Status ? 'selected' : '' %>><%= s %></option><% } %>
+    </select></td>
+    <td><%= p.Name %><% if (/^pickup/i.test(p['Receive By'])) { %> <span class="tag ok">pickup</span><% } %></td>
+    <td><%= p.Phone %></td><td><%= p.Zip %><% if (!p.Lat) { %> <span class="tag" title="Not on the map yet">no pin</span><% } %></td>
+    <td><%= p.Language %></td>
+    <td class="small"><%= (p.Needs || '').replace(/;/g, ' ·') %></td>
+    <td><%= p['Delivery Volunteer'] %></td><td class="small"><%= p['Pickup Time'] %></td>
+    <td><input type="checkbox" class="toggle" data-field="Printed" aria-label="Label printed" <%= p.Printed === 'Yes' ? 'checked' : '' %>></td>
+    <td><input type="checkbox" class="toggle" data-field="Connected" aria-label="Group chat connected" <%= p.Connected === 'Yes' ? 'checked' : '' %>></td>
+    <td><a class="btn small" href="/labels?id=<%= encodeURIComponent(p.ID) %>" target="_blank">Label</a></td>
+  </tr>
+  <% } %>
+</table></div>
+<% if (!pk.length) { %><p class="muted">Nothing here yet. New Google Form responses will appear here automatically.</p><% } %>
+<div id="toast" class="toast" role="status" hidden></div>
+<script>
+const CSRF = <%- JSON.stringify(csrf) %>;
+function bulkBar() {
+  const n = document.querySelectorAll('.pick:checked').length;
+  document.getElementById('bulk').hidden = !n;
+  document.getElementById('bulk-count').textContent = n + ' selected';
+}
+function toast(msg, bad) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = 'toast' + (bad ? ' err' : ''); t.hidden = false;
+  clearTimeout(t.timer); t.timer = setTimeout(() => (t.hidden = true), 2500);
+}
+// Status, Printed and Connected save as soon as they change.
+async function save(el) {
+  const row = el.closest('tr'), id = row.dataset.id, field = el.dataset.field;
+  const value = el.type === 'checkbox' ? (el.checked ? 'Yes' : 'No') : el.value;
+  el.disabled = true;
+  try {
+    const r = await fetch('/packages/' + encodeURIComponent(id), {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded', 'x-requested-with': 'fetch' },
+      body: new URLSearchParams({ _csrf: CSRF, [field]: value }),
+    });
+    const j = await r.json();
+    if (!j.ok) throw new Error();
+    const sel = row.querySelector('[data-field=Status]');
+    sel.value = j.Status;
+    sel.className = 'pill-select pill s-' + j.Status.toLowerCase().replace(/[^a-z]/g, '-');
+    row.querySelector('[data-field=Printed]').checked = j.Printed === 'Yes';
+    row.querySelector('[data-field=Connected]').checked = j.Connected === 'Yes';
+    toast(id + ' saved' + (field === 'Status' ? ': ' + j.Status : ''));
+  } catch (e) {
+    toast('Could not save ' + id + '. Refresh and try again.', true);
+  } finally { el.disabled = false; }
+}
+document.querySelectorAll('.pill-select, .toggle').forEach((el) => el.addEventListener('change', () => save(el)));
+</script>
 <%- include('partials/footer') %>
