@@ -34,13 +34,26 @@ The statuses match the STATUS column already used in the coordinator's Pending s
 - **Volunteers** – names, phones, role (admin = coordinator), status. PINs are stored hashed.
 - **Packing Shifts**, **Messages** (outbox of drafted texts), **Settings** (org name, HQ address, message wording in English and Spanish).
 
-Status columns have dropdowns in Excel. A backup copy is saved every hour in `data/backups/`.
+Status columns have dropdowns in Excel. A backup copy is saved every hour in `data/backups/`. Sign-ins are kept in `data/.sessions.json`, so restarting the app doesn't sign people out.
+
+The Inventory sheet starts with about 90 common items (hygiene, cleaning, baby, pet and pantry, using the form's wording) at 0 on hand, so a coordinator only has to type in counts.
 Editing in Excel: download from the **Excel** page, edit, upload it back (do it at a quiet time, because changes made on the site in between are replaced).
 
 ## Importing the Google Form
 
 In Google Sheets: **File → Download → .xlsx or .csv**, then upload on **Care packages → Import Google Form**.
 Questions are matched by keywords (so rewording the form doesn't break it), sheets with several pasted blocks and repeated header rows are handled, and re-importing is safe: the same phone number + request date updates the existing row instead of duplicating it.
+
+## Automatic sync from the Google Sheet
+
+Instead of downloading and importing, the response sheet can push new submissions to the tracker by itself:
+
+1. On the tracker's host, set `FORM_SYNC_SECRET` to a long random value (at least 16 characters; a password manager can generate one) and restart the app.
+2. Open the Google Sheet the form writes to → **Extensions → Apps Script**, paste in [`docs/google-sheet-sync.gs`](docs/google-sheet-sync.gs), and save.
+3. In Apps Script **Project Settings → Script properties**, add `TRACKER_URL` (the tracker's address) and `SYNC_SECRET` (the same value as `FORM_SYNC_SECRET`). Add `SHEET_NAME` too if the responses aren't on the first tab.
+4. Choose the `setup` function and press **Run**, approving Google's permission prompt.
+
+From then on every form submission is sent within seconds, plus an hourly catch-up, and the sheet gets a **Tracker → Sync now** menu. Re-sending is safe (no duplicates). The time of the last sync shows on the Excel page under `last_form_sync`. To switch to a different sheet later, repeat steps 2–4 in that sheet.
 
 ## Messages to requesters and volunteers
 
@@ -72,6 +85,7 @@ Tests: `npm test`.
 | `SESSION_SECRET` | generated into `DATA_DIR` | |
 | `GEOCODER` | on | Addresses are placed on the map with OpenStreetMap's free geocoder. `off` to disable; Lat/Lng can also be typed in. |
 | `TZ` | America/Phoenix | |
+| `FORM_SYNC_SECRET` | unset | Turns on the Google Sheet sync endpoint (see above). |
 
 ### Hosting on Render (recommended)
 

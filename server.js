@@ -11,7 +11,8 @@ const { Store, STATUS, nextId } = require('./lib/store');
 const L = require('./lib/logic');
 const notify = require('./lib/notify');
 const { geocode, fullAddress } = require('./lib/geo');
-const { parseFormExport } = require('./lib/importer');
+const { parseFormExport, parseRows } = require('./lib/importer');
+const { FileStore } = require('./lib/session-store');
 
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const store = new Store(process.env.WORKBOOK || path.join(DATA_DIR, 'tracker.xlsx'));
@@ -34,6 +35,7 @@ app.use('/static', express.static(path.join(__dirname, 'public')));
 app.use('/vendor/leaflet', express.static(path.join(__dirname, 'node_modules/leaflet/dist')));
 app.use(session({
   secret: sessionSecret(), resave: false, saveUninitialized: false,
+  store: new FileStore(path.join(DATA_DIR, '.sessions.json')),
   cookie: { httpOnly: true, sameSite: 'lax', secure: 'auto', maxAge: 30 * 24 * 3600 * 1000 },
 }));
 
@@ -47,6 +49,7 @@ const clean = (s) => String(s ?? '').trim();
 const safe = (s) => { const t = clean(s); return /^[=+\-@]/.test(t) && !/^[-+]?\d/.test(t) ? "'" + t : t; };
 
 app.use(wrap(async (req, res, next) => {
+  if (req.path.startsWith('/api/')) return next(); // machine-to-machine; no sign-in or page state
   res.locals.flash = req.session.flash; delete req.session.flash;
   res.locals.L = L;
   res.locals.path = req.path;
@@ -60,7 +63,7 @@ app.use(wrap(async (req, res, next) => {
   }
   res.locals.user = req.user;
   res.locals.admin = isAdmin(req.user);
-  if (req.method === 'POST' && !req.is('multipart/form-data') && req.body._csrf !== req.session.csrf) {
+  if (req.method === 'POST' && !req.path.startsWith('/api/') && !req.is('multipart/form-data') && (req.body || {})._csrf !== req.session.csrf) {
     return res.status(403).send('Form expired. Go back, refresh the page and try again.');
   }
   next();
@@ -392,18 +395,11 @@ app.post('/geocode-missing', needLogin, needAdmin, wrap(async (req, res) => {
   res.redirect('/packages');
 }));
 
-// ---------- Google Form import ----------
-app.get('/import', needLogin, needAdmin, (req, res) => res.render('import', { title: 'Import Google Form responses', result: null }));
-app.post('/import', needLogin, needAdmin, upload.single('file'), checkUploadCsrf, wrap(async (req, res) => {
-  if (!req.file) { flash(req, 'Choose a file first.', 'err'); return res.redirect('/import'); }
-  let parsed;
-  try { parsed = await parseFormExport(req.file.buffer, req.file.originalname); } catch (e) {
-    flash(req, 'Could not read that file. Download the responses as .xlsx or .csv and try again.', 'err');
-    return res.redirect('/import');
-  }
-  // Re-importing is safe: the same phone + request date updates the existing row
-  // (filling blanks only) instead of adding a duplicate.
-  const { added, updated } = await store.mutate((db) => {
+// Adds or updates care packages from parsed form rows.
+// Re-importing is safe: the same phone + request date updates the existing row
+// (filling blanks only) instead of adding a duplicate.
+function importParsed(parsed) {
+  return store.mutate((db) => {
     const added = [];
     let updated = 0;
     const key = (r) => `${L.digits(r.Phone)}|${clean(r.Submitted).split(/[ T]/)[0]}`;
@@ -429,6 +425,47 @@ app.post('/import', needLogin, needAdmin, upload.single('file'), checkUploadCsrf
     }
     return { added, updated };
   });
+}
+
+// ---------- Google Sheet sync ----------
+// The Apps Script in docs/google-sheet-sync.gs posts the form's response sheet here
+// whenever someone submits the form (and on demand). Protected by FORM_SYNC_SECRET.
+function syncAuthorized(req) {
+  const secret = process.env.FORM_SYNC_SECRET || '';
+  const given = String(req.get('authorization') || '').replace(/^Bearer\s+/i, '');
+  if (secret.length < 16 || !given) return false;
+  const a = Buffer.from(secret), b = Buffer.from(given);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+app.get('/api/form-sync', (req, res) => {
+  if (!syncAuthorized(req)) return res.status(401).json({ ok: false, error: 'Wrong or missing sync secret.' });
+  res.json({ ok: true });
+});
+app.post('/api/form-sync', express.json({ limit: '10mb' }), wrap(async (req, res) => {
+  if (!syncAuthorized(req)) return res.status(401).json({ ok: false, error: 'Wrong or missing sync secret.' });
+  const table = req.body && req.body.rows;
+  if (!Array.isArray(table) || !table.every(Array.isArray)) return res.status(400).json({ ok: false, error: 'Expected {rows: [[...], ...]} with the header row first.' });
+  const parsed = parseRows(table);
+  const { added, updated } = await importParsed(parsed);
+  await store.mutate((db) => {
+    const row = db.Settings.find((x) => x.Key === 'last_form_sync');
+    const v = `${L.nowStamp()} · ${added.length} new, ${updated} updated`;
+    if (row) row.Value = v; else db.Settings.push({ Key: 'last_form_sync', Value: v, 'What it does': 'Set automatically by the Google Sheet sync' });
+  });
+  (async () => { for (const id of added) await locate(id); })().catch(() => {});
+  res.json({ ok: true, rows: parsed.rows.length, added: added.length, updated });
+}));
+
+// ---------- Google Form import ----------
+app.get('/import', needLogin, needAdmin, (req, res) => res.render('import', { title: 'Import Google Form responses', result: null }));
+app.post('/import', needLogin, needAdmin, upload.single('file'), checkUploadCsrf, wrap(async (req, res) => {
+  if (!req.file) { flash(req, 'Choose a file first.', 'err'); return res.redirect('/import'); }
+  let parsed;
+  try { parsed = await parseFormExport(req.file.buffer, req.file.originalname); } catch (e) {
+    flash(req, 'Could not read that file. Download the responses as .xlsx or .csv and try again.', 'err');
+    return res.redirect('/import');
+  }
+  const { added, updated } = await importParsed(parsed);
   (async () => { for (const id of added) await locate(id); })().catch(() => {});
   res.render('import', { title: 'Import Google Form responses', result: { mapping: parsed.mapping, unmatched: parsed.unmatched, rows: parsed.rows.length, added: added.length, updated } });
 }));

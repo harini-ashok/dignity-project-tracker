@@ -12,6 +12,7 @@ process.env.DATA_DIR = dir;
 process.env.GEOCODER = 'off';
 process.env.ADMIN_NAME = 'Sam Coordinator';
 process.env.ADMIN_PIN = '4321';
+process.env.FORM_SYNC_SECRET = 'test-sync-secret-0123456789';
 delete process.env.SMS_PROVIDER;
 
 const { start, store } = require('../server');
@@ -94,6 +95,10 @@ test('inventory: restricted items are flagged and shortages computed', async () 
   await admin.post('/inventory', { action: 'add', Item: 'Toothpaste', Category: 'Essential', 'On Hand': '5' });
   await admin.post('/inventory', { action: 'add', Item: 'Body spray', Category: 'Essential', 'On Hand': '3', 'Has Aerosol': '1' });
   await admin.post('/inventory', { action: 'add', Item: 'Rice', Category: 'Food', 'On Hand': '1' });
+  // Starter items already exist, so set the counts the way a coordinator would.
+  assert.ok((await store.all('Inventory')).length > 50, 'starter inventory is preloaded');
+  await admin.get('/inventory');
+  await admin.post('/inventory', { action: 'counts', qty_Toothpaste: '5', 'qty_Body spray': '3', qty_Rice: '1' });
   const r = await admin.get('/inventory');
   assert.match(r.text, /Rice<\/td><td>3<\/td><td>1<\/td><td><b>2<\/b>/, 'Alex wants 2 rice + Maria 1, only 1 on hand');
   const alex = (await store.all('Care Packages')).find((p) => p.Name === 'Alex Testcase');
@@ -209,4 +214,30 @@ test('public request form creates a New package', async () => {
   assert.strictEqual(p.Status, 'New');
   assert.strictEqual(p['Items Requested'], 'Soap, Socks');
   assert.strictEqual(p.Restrictions, 'No alcohol, No aerosol');
+});
+
+test('Google Sheet sync endpoint needs the secret and imports rows without duplicates', async () => {
+  const csv = fs.readFileSync(path.join(__dirname, 'fixtures/form-responses-sample.csv'), 'utf8');
+  const { parseCsv } = require('../lib/importer');
+  const rows = parseCsv(csv);
+  const post = (auth, body) => fetch(base + '/api/form-sync', { method: 'POST', headers: { 'content-type': 'application/json', ...(auth ? { authorization: auth } : {}) }, body: JSON.stringify(body) });
+  assert.strictEqual((await post(null, { rows })).status, 401);
+  assert.strictEqual((await post('Bearer wrong-secret-wrong-secret', { rows })).status, 401);
+  assert.strictEqual((await post('Bearer test-sync-secret-0123456789', { nope: 1 })).status, 400);
+  const before = (await store.all('Care Packages')).length;
+  const r = await post('Bearer test-sync-secret-0123456789', { rows: [...rows, ['9/30/2026', '', '', '', '', '', 'Sync Person', '480-555-0188']] });
+  assert.strictEqual(r.status, 200);
+  const j = await r.json();
+  assert.strictEqual(j.added, 1, 'only the new person is added; earlier imports are matched');
+  assert.strictEqual((await store.all('Care Packages')).length, before + 1);
+  assert.match((await store.settings()).last_form_sync, /1 new/);
+});
+
+test('sign-ins survive a restart', async () => {
+  const file = path.join(dir, '.sessions.json');
+  await new Promise((r) => setTimeout(r, 400));
+  assert.ok(fs.existsSync(file));
+  const { FileStore } = require('../lib/session-store');
+  const reloaded = new FileStore(file);
+  assert.ok(Object.values(reloaded.data).some((s) => s.uid), 'a signed-in session was written to disk');
 });
