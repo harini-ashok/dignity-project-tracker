@@ -615,6 +615,11 @@ app.get('/booth', needLogin, wrap(async (req, res) => {
   const expired = rows.filter((r) => hold[r.ID].expired);
   res.render('booth', { title: 'Tempe Feed booth', lanes, day, days, nextDay: L.nextBoothDay(L.today(), s.booth_day), texts, hold, holdWeeks, expired });
 }));
+// The board checks this every few seconds so everyone at the booth sees each other's changes.
+app.get('/booth/version', needLogin, wrap(async (req, res) => {
+  const rows = await store.all('Booth Requests');
+  res.json({ v: `${rows.length}|${rows.reduce((m, r) => (r.Updated > m ? r.Updated : m), '')}|${rows.map((r) => r.Status[0]).join('')}` });
+}));
 app.post('/booth', needLogin, wrap(async (req, res) => {
   const b = req.body;
   const items = [].concat(b.item || []).map(clean);

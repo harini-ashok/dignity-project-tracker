@@ -56,4 +56,25 @@
   </div>
 <% } %>
 </div>
+<div id="live" class="toast" hidden>Someone else just made changes. <a href="">Refresh</a></div>
+<script>
+  // Several people use the board at once during Tempe Feed: pick up their changes.
+  (() => {
+    let seen = null;
+    const form = document.getElementById('boothform');
+    const busy = () => [...form.querySelectorAll('input:not([type=hidden]):not([type=date])')].some((i) => i.value.trim()) || form.contains(document.activeElement);
+    const check = async () => {
+      try {
+        const { v } = await (await fetch('/booth/version', { headers: { 'x-requested-with': 'fetch' } })).json();
+        if (seen && v !== seen) {
+          if (busy()) document.getElementById('live').hidden = false;
+          else return location.reload();
+        }
+        seen = v;
+      } catch {}
+    };
+    check();
+    setInterval(check, 10000);
+  })();
+</script>
 <%- include('partials/footer') %>

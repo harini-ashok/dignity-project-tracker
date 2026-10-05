@@ -200,6 +200,20 @@ test('Tempe Feed booth: request, buy, board', async () => {
   assert.doesNotMatch(page, /waited at the booth more than/);
 });
 
+test('booth: many volunteers saving requests at the same moment lose nothing', async () => {
+  const before = (await store.all('Booth Requests')).length;
+  const people = [vol, admin, client()];
+  await people[2].login('Sam Coordinator', '4321');
+  await Promise.all(people.map((c) => c.get('/booth')));
+  await Promise.all(Array.from({ length: 15 }, (_, i) => people[i % 3].post('/booth', { name: `Rush ${i}`, item: ['Socks', 'Hat'], bring_on: '2026-10-20' })));
+  const rows = await store.all('Booth Requests');
+  assert.strictEqual(rows.length, before + 30);
+  assert.strictEqual(new Set(rows.map((r) => r.ID)).size, rows.length, 'every request got its own ID');
+  const v1 = (await (await vol.get('/booth/version')).res.json()).v;
+  await admin.post('/booth', { name: 'One more', item: 'Gloves', bring_on: '2026-10-20' });
+  assert.notStrictEqual((await (await vol.get('/booth/version')).res.json()).v, v1, 'the board notices new requests');
+});
+
 test('packing shifts: sign up and choose packages', async () => {
   await admin.get('/shifts');
   await admin.post('/shifts', { Date: '2099-01-01', Start: '10:00', End: '12:00', Location: 'HQ', Capacity: '2' });
