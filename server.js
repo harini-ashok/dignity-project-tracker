@@ -11,7 +11,7 @@ const { Store, STATUS, nextId } = require('./lib/store');
 const L = require('./lib/logic');
 const notify = require('./lib/notify');
 const { geocode, fullAddress } = require('./lib/geo');
-const { parseFormExport, parseRows } = require('./lib/importer');
+const { parseFormExport, parseRows, TRACKER_COLUMNS } = require('./lib/importer');
 const { FileStore } = require('./lib/session-store');
 
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
@@ -141,7 +141,7 @@ app.post('/request', wrap(async (req, res) => {
       'Clothing & Sizes': safe(b.clothing), Allergies: safe(b.allergies), 'Food Dislikes': safe(b.dislikes),
       Restrictions: safe([...new Set(restrictions.join(', ').split(', ').filter(Boolean))].join(', ')),
       Notes: safe(b.story), 'Filled By': b.filled_by === 'Volunteer' ? safe(`On behalf of someone else: ${clean(b.referral)}`) : 'Myself',
-      Updated: L.nowStamp(),
+      Source: 'Website', Updated: L.nowStamp(),
     });
     return ID;
   });
@@ -404,20 +404,24 @@ function importParsed(parsed) {
     let updated = 0;
     const key = (r) => `${L.digits(r.Phone)}|${clean(r.Submitted).split(/[ T]/)[0]}`;
     const byKey = new Map(db['Care Packages'].map((p) => [key(p), p]));
+    const byId = new Map(db['Care Packages'].map((p) => [p.ID, p]));
     const seenAnswers = new Set(db['Form Answers'].map((a) => `${a.ID}|${a.Question}|${a.Answer}`));
-    for (const { answers, ...r } of parsed.rows) {
+    for (const parsedRow of parsed.rows) {
+      const { answers, tracker, sheetRow, ...r } = parsedRow;
       const row = Object.fromEntries(Object.entries(r).map(([k, v]) => [k, safe(v)]));
-      let p = byKey.get(key(r));
+      let p = (tracker && byId.get(tracker.ID)) || byKey.get(key(r));
       if (p) {
         let changed = false;
         for (const [k, v] of Object.entries(row)) if (v && !p[k]) { p[k] = v; changed = true; }
         if (changed) { p.Updated = L.nowStamp(); updated++; }
       } else {
-        p = { ID: nextId(db['Care Packages'], 'Care Packages'), ...row, Submitted: row.Submitted || L.nowStamp(), Updated: L.nowStamp() };
+        p = { ID: nextId(db['Care Packages'], 'Care Packages'), ...row, Submitted: row.Submitted || L.nowStamp(), Source: parsed.source || 'Import', Updated: L.nowStamp() };
         db['Care Packages'].push(p);
         byKey.set(key(r), p);
+        byId.set(p.ID, p);
         added.push(p.ID);
       }
+      parsedRow.id = p.ID;
       for (const a of answers) {
         const k = `${p.ID}|${safe(a.question)}|${safe(a.answer)}`;
         if (!seenAnswers.has(k)) { seenAnswers.add(k); db['Form Answers'].push({ ID: p.ID, Question: safe(a.question), Answer: safe(a.answer) }); }
@@ -446,15 +450,76 @@ app.post('/api/form-sync', express.json({ limit: '10mb' }), wrap(async (req, res
   const table = req.body && req.body.rows;
   if (!Array.isArray(table) || !table.every(Array.isArray)) return res.status(400).json({ ok: false, error: 'Expected {rows: [[...], ...]} with the header row first.' });
   const parsed = parseRows(table);
+  parsed.source = 'Google Form';
   const { added, updated } = await importParsed(parsed);
+  const back = await sheetSync(parsed);
   await store.mutate((db) => {
     const row = db.Settings.find((x) => x.Key === 'last_form_sync');
-    const v = `${L.nowStamp()} · ${added.length} new, ${updated} updated`;
+    const v = `${L.nowStamp()} · ${added.length} new, ${updated} updated, ${back.applied} changed in the sheet, ${back.append.length} sent to the sheet`;
     if (row) row.Value = v; else db.Settings.push({ Key: 'last_form_sync', Value: v, 'What it does': 'Set automatically by the Google Sheet sync' });
   });
   (async () => { for (const id of added) await locate(id); })().catch(() => {});
-  res.json({ ok: true, rows: parsed.rows.length, added: added.length, updated });
+  res.json({ ok: true, rows: parsed.rows.length, added: added.length, updated, applied: back.applied, columns: TRACKER_COLUMNS, statuses: STATUS.care, write: back.write, append: back.append });
 }));
+
+// Two-way part of the Google Sheet sync.
+// 1. Edits a coordinator made to the "Tracker ..." columns in the sheet (marked by
+//    "Tracker Edited", which the sheet's script stamps) are applied to the site.
+// 2. The site's current status, volunteer, pickup and delivery date are sent back
+//    for every row, so the sheet always shows where each request stands.
+// 3. Requests made on the website's own form are appended to the sheet.
+const forSheet = (v) => { const t = clean(v); return /^[=+\-@]/.test(t) ? "'" + t : t; };
+function sheetSync(parsed) {
+  return store.mutate((db) => {
+    const byId = new Map(db['Care Packages'].map((p) => [p.ID, p]));
+    let applied = 0;
+    const write = [];
+    const inSheet = new Set();
+    for (const r of parsed.rows) {
+      const p = byId.get(r.id);
+      if (!p) continue;
+      inSheet.add(p.ID);
+      const t = r.tracker || {};
+      if (t.Edited) {
+        let changed = false;
+        const set = (field, v) => { v = safe(v); if (v !== clean(p[field])) { p[field] = v; changed = true; } };
+        // "Tracker Edited" lists the columns someone changed, e.g. "Status, Pickup".
+        const edited = new Set(clean(t.Edited).split(/\s*,\s*/).map((x) => x.toLowerCase()));
+        const was = (k) => k in t && edited.has(k.toLowerCase());
+        const status = STATUS.care.find((x) => x.toLowerCase() === clean(t.Status).toLowerCase());
+        if (was('Status') && status) set('Status', status);
+        if (was('Volunteer')) set('Delivery Volunteer', t.Volunteer);
+        if (was('Pickup')) set('Pickup Time', t.Pickup);
+        if (was('Delivered')) set('Delivered On', t.Delivered);
+        if (changed) { p.Updated = L.nowStamp(); applied++; }
+      }
+      write.push({ row: r.sheetRow, edited: t.Edited || '', values: trackerValues(p) });
+    }
+    // Website requests that aren't in the sheet yet, laid out under the form's own questions.
+    const append = [];
+    const cols = parsed.cols || [];
+    if (cols.some((m) => m && m.tracker === 'ID')) {
+      for (const p of db['Care Packages']) {
+        if (p.Source !== 'Website' || inSheet.has(p.ID)) continue;
+        const line = new Array(cols.length).fill('');
+        const used = new Set();
+        cols.forEach((m, i) => {
+          if (!m) return;
+          if (m.tracker) { line[i] = trackerValues(p)[TRACKER_COLUMNS.indexOf('Tracker ' + m.tracker)] ?? ''; return; }
+          const field = m.field === 'Date Of Request' ? 'Submitted' : m.field;
+          if (!field || used.has(field) || !clean(p[field])) return;
+          used.add(field);
+          line[i] = forSheet(p[field]);
+        });
+        if (used.has('Name') || used.has('Phone')) append.push(line);
+      }
+    }
+    return { applied, write, append };
+  });
+}
+function trackerValues(p) {
+  return [p.ID, p.Status, p['Delivery Volunteer'], p['Pickup Time'], p['Delivered On'], p.Updated, ''].map(forSheet);
+}
 
 // ---------- Google Form import ----------
 app.get('/import', needLogin, needAdmin, (req, res) => res.render('import', { title: 'Import Google Form responses', result: null }));

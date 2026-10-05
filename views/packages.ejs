@@ -1,7 +1,8 @@
 <%- include('partials/header') %>
 <div class="spread"><h1>Care packages</h1>
-  <div class="row"><a class="btn" href="/import">Import Google Form</a><a class="btn" href="/request" target="_blank">New request form</a>
+  <div class="row"><a class="btn" href="/request" target="_blank">New request form</a>
   <form method="post" action="/geocode-missing" class="inline"><%- include('partials/csrf') %><button>Place addresses on map</button></form></div></div>
+<p class="sync small"><% if (settings.last_form_sync) { %><span class="live"></span>Connected to the Google Form. New responses appear here automatically, and status changes show in the Google Sheet. Last sync: <%= settings.last_form_sync %>.<% } else { %>Not connected to the Google Form yet. <a href="https://github.com/harini-ashok/dignity-project-tracker/blob/main/README.md#connecting-the-google-form">How to connect it</a> · <a href="/import">upload a file instead</a><% } %></p>
 <form class="row card" method="get">
   <select name="status" style="max-width:220px"><option value="">All statuses</option>
     <% for (const s of statuses) { %><option <%= s === status ? 'selected' : '' %>><%= s %></option><% } %></select>

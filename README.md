@@ -11,7 +11,7 @@ workbook at any time, open it in Excel, and every sheet looks like the spreadshe
 
 | Who | What they do |
 | --- | --- |
-| **Coordinator** | Imports Google Form responses, reviews new requests and sets them to *Ready for Volunteer*, prints labels, sends the pre-written WhatsApp messages, sees the shopping list. |
+| **Coordinator** | Sees Google Form responses arrive automatically, reviews new requests and sets them to *Ready for Volunteer*, prints labels, sends the pre-written WhatsApp messages, sees the shopping list. |
 | **Delivery volunteer** | Opens the numbered delivery map (like the weekly WhatsApp map), taps **I'll deliver this**, enters pickup and delivery times. It's assigned to them in the workbook instantly. Then sees the full address, directions, and one-tap WhatsApp buttons; marks *Picked Up* and *Delivered*. |
 | **Packing volunteer** | Signs up for a packing shift at HQ and ticks which packages they'll pack. Uses the packing checklist, which flags items that clash with someone's restrictions (no alcohol / no aerosol at sober-living homes, allergies, foods they won't eat). Marking packed takes the items out of inventory. |
 | **Booth volunteer at Tempe Feed** | Enters name, phone and items (with sizes) on their phone. The board tracks *Requested → Bought → At Booth → Picked Up* for each Tuesday. Pressing *Bought* drafts a text to the person. |
@@ -39,21 +39,28 @@ Status columns have dropdowns in Excel. The look follows dignityphoenix.org; cha
 The Inventory sheet starts with about 90 common items (hygiene, cleaning, baby, pet and pantry, using the form's wording) at 0 on hand, so a coordinator only has to type in counts.
 Editing in Excel: download from the **Excel** page, edit, upload it back (do it at a quiet time, because changes made on the site in between are replaced).
 
-## Importing the Google Form
+## Connecting the Google Form
 
-In Google Sheets: **File → Download → .xlsx or .csv**, then upload on **Care packages → Import Google Form**.
-Questions are matched by keywords (so rewording the form doesn't break it), sheets with several pasted blocks and repeated header rows are handled, and re-importing is safe: the same phone number + request date updates the existing row instead of duplicating it.
+The Google Form and the tracker stay in step both ways, through a small script in the form's response sheet:
 
-## Automatic sync from the Google Sheet
+- **Form → tracker:** each new response appears on **Care packages** within seconds, with a catch-up every 5 minutes.
+- **Tracker → sheet:** every response gets *Tracker* columns at the right (ID, Status, Volunteer, Pickup, Delivered, Updated) showing where it stands on the site. Requests made on the site's own form are added to the bottom of the sheet.
+- **Sheet → tracker:** change *Tracker Status*, *Tracker Volunteer*, *Tracker Pickup* or *Tracker Delivered* in the sheet and the site picks it up on the next sync. Only the cells someone actually changed are sent (the script notes them in *Tracker Edited*), so a sheet edit never undoes a newer change made on the site.
 
-Instead of downloading and importing, the response sheet can push new submissions to the tracker by itself:
+Re-sending is always safe: rows are matched by Tracker ID, or by phone number + request date, and never duplicated.
+
+Setup:
 
 1. On the tracker's host, set `FORM_SYNC_SECRET` to a long random value (at least 16 characters; a password manager can generate one) and restart the app.
 2. Open the Google Sheet the form writes to → **Extensions → Apps Script**, paste in [`docs/google-sheet-sync.gs`](docs/google-sheet-sync.gs), and save.
 3. In Apps Script **Project Settings → Script properties**, add `TRACKER_URL` (the tracker's address) and `SYNC_SECRET` (the same value as `FORM_SYNC_SECRET`). Add `SHEET_NAME` too if the responses aren't on the first tab.
 4. Choose the `setup` function and press **Run**, approving Google's permission prompt.
 
-From then on every form submission is sent within seconds, plus an hourly catch-up, and the sheet gets a **Tracker → Sync now** menu. Re-sending is safe (no duplicates). The time of the last sync shows on the Excel page under `last_form_sync`. To switch to a different sheet later, repeat steps 2–4 in that sheet.
+The sheet then has a **Tracker → Sync now** menu, and the Care packages page shows the last sync time. To switch to the real form later, repeat steps 2–4 in its sheet.
+
+**Trying it with made-up people:** in an empty Google Sheet do steps 2–3, then run `createSampleForm` instead of `setup`. It builds a sample request form linked to that sheet, submits five invented people, and turns the sync on.
+
+**No connection?** *Care packages → upload a file instead* still accepts a downloaded .xlsx or .csv of the responses.
 
 ## Messages to requesters and volunteers
 

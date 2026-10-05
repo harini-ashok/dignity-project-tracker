@@ -129,3 +129,5 @@ details summary { cursor: pointer; font-weight: 600; }
 input:focus, select:focus, textarea:focus { outline: 2px solid var(--purple); outline-offset: 0; border-color: var(--purple); }
 .foot { text-align: center; color: var(--muted); font-size: .85rem; padding: 0 16px 30px; }
 .foot b { color: var(--magenta); }
+.sync { margin: -4px 0 12px; color: var(--muted); }
+.live { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--accent); margin-right: 6px; box-shadow: 0 0 0 3px var(--accent-soft); }
