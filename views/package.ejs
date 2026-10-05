@@ -31,13 +31,16 @@
     </div>
   </section>
 
-  <% if (p['Delivery Volunteer'] || admin) { %>
+  <% if (admin) { %>
   <section class="card noprint">
     <h2 style="margin-top:0">Coordinate</h2>
     <p class="small muted">Each button opens WhatsApp (or texting) on your phone with the message filled in. Nothing is sent until you press send.</p>
     <div class="stack">
-      <div><b>To <%= p.Name %></b> <span class="small muted">(volunteer on the way)</span><br>
+      <% if (texts.requester) { %>
+      <div><b>To <%= p.Name %></b> <span class="small muted">(for status: <%= p.Status %>)</span>
+        <p class="small" style="white-space:pre-wrap;margin:4px 0"><%= texts.requester %></p>
         <a class="btn wa small" href="<%= wa(p.Phone, texts.requester) %>" target="_blank">WhatsApp</a> <a class="btn small" href="<%= sms(p.Phone, texts.requester) %>">Text</a></div>
+      <% } %>
       <% if (vol) { %>
       <div><b>To <%= vol.Name %></b> <span class="small muted">(pickup details)</span><br>
         <a class="btn wa small" href="<%= wa(vol.Phone, texts.volunteer) %>" target="_blank">WhatsApp</a> <a class="btn small" href="<%= sms(vol.Phone, texts.volunteer) %>">Text</a></div>

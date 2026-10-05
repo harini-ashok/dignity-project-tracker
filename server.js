@@ -238,7 +238,10 @@ app.get('/packages', needLogin, needAdmin, wrap(async (req, res) => {
   if (status) pk = pk.filter((p) => p.Status === status);
   if (q) pk = pk.filter((p) => Object.values(p).join(' ').toLowerCase().includes(q));
   pk.sort((a, b) => STATUS.care.indexOf(a.Status) - STATUS.care.indexOf(b.Status) || a.ID.localeCompare(b.ID));
-  res.render('packages', { title: 'Care packages', pk, status, q, statuses: STATUS.care });
+  const s = res.locals.settings;
+  const vols = await store.all('Volunteers');
+  const texts = Object.fromEntries(pk.map((p) => [p.ID, L.careText(p, s, vols.find((v) => sameUser(v.Name, p['Delivery Volunteer'])))]));
+  res.render('packages', { title: 'Care packages', pk, status, q, statuses: STATUS.care, texts });
 }));
 
 async function loadPackage(req, res) {
@@ -256,7 +259,7 @@ app.get('/packages/:id', needLogin, wrap(async (req, res) => {
   const vol = vols.find((v) => sameUser(v.Name, p['Delivery Volunteer']));
   const vars = L.packageVars(p, s, vol);
   const texts = {
-    requester: L.fill(L.template(s, 'msg_claimed_requester', p), vars), volunteer: L.fill(s.msg_claimed_volunteer, vars),
+    requester: L.careText(p, s, vol), volunteer: L.fill(s.msg_claimed_volunteer, vars),
     intro: L.fill(s.msg_intro, vars), delivered: L.fill(L.template(s, 'msg_delivered', p), vars),
   };
   res.render('package', {
@@ -292,6 +295,10 @@ app.post('/packages/:id', needLogin, needAdmin, wrap(async (req, res) => {
     }
     if (before.Address !== p.Address && !req.body.Zip) p.Zip = L.zipOf(p.Address);
     if (p['Delivery Volunteer'] && ['New', 'Texted - No Response', 'Ready for Volunteer'].includes(p.Status)) p.Status = 'Volunteer Assigned';
+    if (p.Status === 'Picked Up' && before.Status !== 'Picked Up') {
+      const vol = db.Volunteers.find((v) => sameUser(v.Name, p['Delivery Volunteer']));
+      await notify.queue(db, [{ ref: p.ID, to: p.Name, phone: p.Phone, body: L.careText(p, s, vol) }], req.user.Name);
+    }
     if (p.Status === 'Delivered' && before.Status !== 'Delivered') {
       p['Delivered On'] = L.today();
       await notify.queue(db, [{ ref: p.ID, to: p.Name, phone: p.Phone, body: L.fill(L.template(s, 'msg_delivered', p), L.packageVars(p, s)) }], req.user.Name);
@@ -333,7 +340,12 @@ app.post('/packages/:id/step', needLogin, wrap(async (req, res) => {
     const p = db['Care Packages'].find((x) => x.ID === req.params.id);
     if (!p || !(isAdmin(req.user) || sameUser(p['Delivery Volunteer'], req.user.Name))) return false;
     if (!['Picked Up', 'Delivered'].includes(to)) return false;
+    const was = p.Status;
     p.Status = to;
+    if (to === 'Picked Up' && was !== 'Picked Up') {
+      const vol = db.Volunteers.find((v) => sameUser(v.Name, p['Delivery Volunteer']));
+      await notify.queue(db, [{ ref: p.ID, to: p.Name, phone: p.Phone, body: L.careText(p, s, vol) }], req.user.Name);
+    }
     if (to === 'Delivered') {
       p['Delivered On'] = L.today();
       await notify.queue(db, [{ ref: p.ID, to: p.Name, phone: p.Phone, body: L.fill(L.template(s, 'msg_delivered', p), L.packageVars(p, s)) }], req.user.Name);
@@ -708,11 +720,20 @@ app.post('/me', needLogin, wrap(async (req, res) => {
 app.get('/messages', needLogin, needAdmin, wrap(async (req, res) => {
   const msgs = (await store.all('Messages')).map((m, i) => ({ ...m, idx: i })).reverse();
   const show = req.query.all ? msgs : msgs.filter((m) => m.Status === 'Ready to send');
-  res.render('messages', { title: 'Messages', msgs: show, all: !!req.query.all, auto: notify.autoSendEnabled() });
+  // Two groups, like the two programs: care package deliveries and the Tempe Feed booth.
+  const groups = [
+    { key: 'care', title: 'Care packages', msgs: show.filter((m) => !/^BR-/.test(m.Ref)) },
+    { key: 'booth', title: 'Tempe Feed booth', msgs: show.filter((m) => /^BR-/.test(m.Ref)) },
+  ];
+  const tab = groups.find((g) => g.key === req.query.tab) ? req.query.tab : (groups[0].msgs.length || !groups[1].msgs.length ? 'care' : 'booth');
+  res.render('messages', { title: 'Messages', groups, tab, all: !!req.query.all, auto: notify.autoSendEnabled() });
 }));
 app.post('/messages/:idx', needLogin, needAdmin, wrap(async (req, res) => {
   await store.mutate((db) => { const m = db.Messages[Number(req.params.idx)]; if (m && STATUS.message.includes(req.body.to)) m.Status = req.body.to; });
-  res.redirect('/messages' + (req.body.all ? '?all=1' : ''));
+  const qs = new URLSearchParams();
+  if (req.body.all) qs.set('all', '1');
+  if (['care', 'booth'].includes(req.body.tab)) qs.set('tab', req.body.tab);
+  res.redirect('/messages' + (qs.toString() ? '?' + qs : ''));
 }));
 
 // ---------- workbook download / upload / settings ----------

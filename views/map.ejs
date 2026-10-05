@@ -1,5 +1,6 @@
 <%- include('partials/header', { head: '<link rel="stylesheet" href="/vendor/leaflet/leaflet.css">' }) %>
-<% const colors = ['#e0245e','#1f6fb2','#17a2b8','#4c9a2a','#e8771a','#7b3fa0','#e0a800','#138a8a','#c0392b','#5446cf']; %>
+<%# Pin colors from dignityphoenix.org: indigo, purple, magenta, teal, cyan, plus darker shades so neighbors differ. %>
+<% const colors = ['#5446cf','#d136c6','#01a898','#9834ea','#049ccb','#3a2fa8','#a3209a','#00796d','#6d1fb0','#03729a']; %>
 <div class="spread noprint">
   <div><h1>Delivery map</h1>
   <p class="muted">Pick a numbered delivery you can do. Exact addresses and phone numbers show once it's yours.</p></div>
@@ -18,7 +19,7 @@
       <div class="num" style="background:<%= colors[(pin.n - 1) % colors.length] %>"><%= pin.n %></div>
       <div style="flex:1">
         <b><%= pin.street %></b>
-        <% if (pin.packages.length > 1) { %><div class="small" style="color:#c0392b">(<%= pin.packages.length %> deliveries here)</div><% } %>
+        <% if (pin.packages.length > 1) { %><div class="small" style="color:var(--magenta)">(<%= pin.packages.length %> deliveries here)</div><% } %>
         <% if (!pin.lat) { %><div class="small muted">Not on the map yet</div><% } %>
         <% for (const p of pin.packages) { %>
           <div class="small" style="margin-top:4px">
@@ -55,7 +56,7 @@
   const bounds = [];
   for (const p of pins) {
     if (p.lat == null) continue;
-    const icon = L.divIcon({ className: 'num-marker', html: `<div class="num" style="background:${colors[(p.n - 1) % colors.length]}">${p.n}</div>`, iconSize: [30, 30], iconAnchor: [15, 15] });
+    const icon = L.divIcon({ className: 'num-marker', html: `<div class="drop" style="background:${colors[(p.n - 1) % colors.length]}"><span>${p.n}</span></div>`, iconSize: [40, 40], iconAnchor: [20, 48] });
     L.marker([p.lat, p.lng], { icon }).addTo(map).on('click', () => {
       const el = document.getElementById('pin-' + p.n);
       el.scrollIntoView({ behavior: 'smooth', block: 'center' });

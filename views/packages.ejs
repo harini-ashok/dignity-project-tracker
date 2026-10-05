@@ -34,7 +34,7 @@
     <td><%= p['Delivery Volunteer'] %></td><td class="small"><%= p['Pickup Time'] %></td>
     <td><input type="checkbox" class="toggle" data-field="Printed" aria-label="Label printed" <%= p.Printed === 'Yes' ? 'checked' : '' %>></td>
     <td><input type="checkbox" class="toggle" data-field="Connected" aria-label="Group chat connected" <%= p.Connected === 'Yes' ? 'checked' : '' %>></td>
-    <td><a class="btn small" href="/labels?id=<%= encodeURIComponent(p.ID) %>" target="_blank">Label</a></td>
+    <td class="nowrap"><% if (p.Phone && texts[p.ID]) { %><a class="btn wa small" target="_blank" href="<%= L.waLink(p.Phone, texts[p.ID]) %>" title="<%= texts[p.ID] %>">Text</a> <% } %><a class="btn small" href="/labels?id=<%= encodeURIComponent(p.ID) %>" target="_blank">Label</a></td>
   </tr>
   <% } %>
 </table></div>

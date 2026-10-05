@@ -186,12 +186,13 @@ function createSampleForm() {
   };
   form.setDestination(FormApp.DestinationType.SPREADSHEET, ss.getId());
 
+  // Made-up people at public buildings (library, city halls) so they land on the map.
   var people = [
-    ['Ana Demo', '480-555-0101', 'English', 0, '4400 W Demo Dr, Phoenix, AZ 85031', '3', 'House/apartment', ['Toothpaste', 'Shampoo', 'Rice', 'Beans'], '', 'Just moved and starting over.'],
-    ['Ben Sample', '480-555-0102', 'English', 0, '7200 S Sample Ln, Laveen, AZ 85339', '1', 'Recovery or sober living home', ['Deodorant', 'Mouthwash', 'Socks'], '', 'New job starts next week.'],
-    ['Carla Ejemplo', '602-555-0103', 'Español', 0, '4400 S Example St, Phoenix, AZ 85040', '5', 'House/apartment', ['Diapers / Pañales', 'Wipes (Toallitas)', 'Rice', 'Pasta'], 'Peanuts', 'Tengo tres niños pequeños.'],
+    ['Ana Demo', '480-555-0101', 'English', 0, '3500 S Rural Rd, Tempe, AZ 85282', '3', 'House/apartment', ['Toothpaste', 'Shampoo', 'Rice', 'Beans'], '', 'Just moved and starting over.'],
+    ['Ben Sample', '480-555-0102', 'English', 0, '200 W Washington St, Phoenix, AZ 85003', '1', 'Recovery or sober living home', ['Deodorant', 'Mouthwash', 'Socks'], '', 'New job starts next week.'],
+    ['Carla Ejemplo', '602-555-0103', 'Español', 0, '1 E Main St, Mesa, AZ 85201', '5', 'House/apartment', ['Diapers / Pañales', 'Wipes (Toallitas)', 'Rice', 'Pasta'], 'Peanuts', 'Tengo tres niños pequeños.'],
     ['Dev Placeholder', '602-555-0104', 'English', 1, '', '2', 'Shelter', ['Toothbrush', 'Bar soap', 'Cereal'], 'Gluten', ''],
-    ['Eva Muestra', '602-555-0105', 'Español', 0, '3600 N Mock Ave, Phoenix, AZ 85033', '4', 'House/apartment', ['Laundry detergent', 'Canned vegetables', 'Peanut butter'], '', 'Gracias por su ayuda.'],
+    ['Eva Muestra', '602-555-0105', 'Español', 0, '175 S Arizona Ave, Chandler, AZ 85225', '4', 'House/apartment', ['Laundry detergent', 'Canned vegetables', 'Peanut butter'], '', 'Gracias por su ayuda.'],
   ];
   people.forEach(function (p) {
     var r = form.createResponse()
