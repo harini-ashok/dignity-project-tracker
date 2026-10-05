@@ -610,7 +610,10 @@ app.get('/booth', needLogin, wrap(async (req, res) => {
   const forDay = rows.filter((r) => (r['Bring On'] || '') === day);
   const lanes = STATUS.booth.map((st) => ({ status: st, rows: forDay.filter((r) => r.Status === st) }));
   const texts = Object.fromEntries(rows.map((r) => [r.ID, L.fill(s.msg_booth_ready, { name: r.Name.split(' ')[0], item: r.Item, date: r['Bring On'], org: s.org_name })]));
-  res.render('booth', { title: 'Tempe Feed booth', lanes, day, days, nextDay: L.nextBoothDay(L.today(), s.booth_day), texts });
+  const holdWeeks = Number(s.booth_hold_weeks) || 5;
+  const hold = Object.fromEntries(rows.map((r) => [r.ID, L.boothHold(r, holdWeeks)]));
+  const expired = rows.filter((r) => hold[r.ID].expired);
+  res.render('booth', { title: 'Tempe Feed booth', lanes, day, days, nextDay: L.nextBoothDay(L.today(), s.booth_day), texts, hold, holdWeeks, expired });
 }));
 app.post('/booth', needLogin, wrap(async (req, res) => {
   const b = req.body;

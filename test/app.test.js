@@ -187,6 +187,17 @@ test('Tempe Feed booth: request, buy, board', async () => {
   await vol.post(`/booth/${rows[0].ID}`, { to: 'Bought', day: '2026-10-13' });
   assert.strictEqual((await store.all('Booth Requests'))[0].Status, 'Bought');
   assert.strictEqual((await store.all('Messages')).length, texts, 'no duplicate text');
+
+  // Items left at the booth more than 5 weeks after the request get flagged for cancelling.
+  const sixWeeksAgo = new Date(Date.now() - 43 * 86400000).toISOString().slice(0, 10);
+  await store.mutate((db) => { const r = db['Booth Requests'].find((x) => x.ID === rows[1].ID); r.Date = sixWeeksAgo; r.Status = 'At Booth'; db['Booth Requests'].find((x) => x.ID === rows[0].ID).Status = 'At Booth'; });
+  let page = (await vol.get('/booth?day=2026-10-13')).text;
+  assert.match(page, /1 item has waited at the booth more than 5 weeks/);
+  assert.match(page, /Over 5 weeks, cancel\?/);
+  assert.match(page, /Week 1 of 5/, 'a fresh item at the booth shows its week instead');
+  await vol.post(`/booth/${rows[1].ID}`, { to: 'Cancelled', day: '2026-10-13' });
+  page = (await vol.get('/booth?day=2026-10-13')).text;
+  assert.doesNotMatch(page, /waited at the booth more than/);
 });
 
 test('packing shifts: sign up and choose packages', async () => {

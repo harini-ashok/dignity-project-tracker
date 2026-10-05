@@ -18,14 +18,27 @@
 </section>
 <section class="card">
   <h2 style="margin-top:0">How this board works</h2>
-  <p class="small">Requested → someone buys it (they press <b>Bought</b>, which drafts a text to the person) → it goes on the board at the booth (<b>At Booth</b>) → the person collects it (<b>Picked Up</b>). Use <b>←</b> to move an item back a step if it was moved by mistake. Anything not collected can be moved to another Tuesday.</p>
+  <p class="small">Requested → someone buys it (they press <b>Bought</b>, which drafts a text to the person) → it goes on the board at the booth (<b>At Booth</b>) → the person collects it (<b>Picked Up</b>). Use <b>←</b> to move an item back a step if it was moved by mistake. Items are held for <%= holdWeeks %> weeks after the request. After that the card turns red so you can cancel it.</p>
 </section>
 </div>
+<% if (expired.length) { %>
+<section class="card expired-box">
+  <h2 style="margin-top:0">⚠ <%= expired.length %> <%= expired.length === 1 ? 'item has' : 'items have' %> waited at the booth more than <%= holdWeeks %> weeks</h2>
+  <p class="small">These weren't picked up in time. Cancel them, or move them back if the person is still coming.</p>
+  <% for (const r of expired) { %>
+    <div class="row" style="align-items:center;margin-top:6px">
+      <span><b><%= r.Item %></b> for <%= r.Name %> · requested <%= r.Date %> (<%= hold[r.ID].weeks %> weeks ago)</span>
+      <form method="post" action="/booth/<%= r.ID %>" class="inline"><%- include('partials/csrf') %><input type="hidden" name="to" value="Cancelled"><input type="hidden" name="day" value="<%= day %>"><button class="small">Cancel it</button></form>
+    </div>
+  <% } %>
+</section>
+<% } %>
 <div class="board">
 <% for (const lane of lanes) { %>
   <div class="lane"><h3><%= lane.status %> <span class="muted"><%= lane.rows.length %></span></h3>
   <% for (const r of lane.rows) { %>
-    <div class="ticket">
+    <div class="ticket<%= hold[r.ID].expired ? ' expired' : '' %>">
+      <% if (hold[r.ID].expired) { %><span class="tag">⚠ Over <%= holdWeeks %> weeks, cancel?</span><% } else if (r.Status === 'At Booth') { %><span class="tag ok">Week <%= Math.min(hold[r.ID].weeks + 1, holdWeeks) %> of <%= holdWeeks %></span><% } %>
       <b><%= r.Item %></b><% if (r.Details) { %><span class="small"><%= r.Details %></span><br><% } %>
       <span class="small"><%= r.Name %> · <%= r.Phone %></span>
       <% if (r['Handled By']) { %><br><span class="small muted">Bought by <%= r['Handled By'] %></span><% } %>
