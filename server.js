@@ -506,7 +506,20 @@ function sheetSync(parsed) {
       // ("Status, Pickup") and form answer columns by number ("#9" = column I).
       const edited = new Set(clean(t.Edited).split(/\s*,\s*/).filter(Boolean).map((x) => x.toLowerCase()));
       const editedCols = new Set([...edited].filter((x) => /^#\d+$/.test(x)).map((x) => Number(x.slice(1)) - 1));
-      if (t.Edited) {
+      // Answers that differ from the copy of the row kept at the last sync were changed in the
+      // sheet, whether or not the edit was marked. Before there is a copy, the sheet's name,
+      // phone and address win over the site's.
+      const answer = (i) => !(r.cols && r.cols[i] && r.cols[i].tracker);
+      let copy = null;
+      try { copy = JSON.parse(p['Sheet Copy'] || 'null'); } catch { copy = null; }
+      if (!Array.isArray(copy) || copy.length !== r.raw.length) copy = null;
+      r.raw.forEach((v, i) => {
+        if (!answer(i)) return;
+        const now = clean(v);
+        if (copy ? now !== copy[i] : now && r.cols && r.cols[i] && ['Name', 'Phone', 'Address'].includes(r.cols[i].field) && r.cols[i].how === 'one' && now !== clean(p[r.cols[i].field]).replace(/^'/, '')) editedCols.add(i);
+      });
+      p['Sheet Copy'] = JSON.stringify(r.raw.map((v, i) => (answer(i) ? clean(v) : '')));
+      if (t.Edited || editedCols.size) {
         let changed = false;
         const set = (field, v) => { v = safe(v); if (v !== clean(p[field])) { p[field] = v; changed = true; } };
         // Answers edited in the sheet replace the site's copy (re-read from the whole row).
@@ -542,7 +555,7 @@ function sheetSync(parsed) {
       // Name, phone and address changed on the site go back into the form's own columns.
       for (const field of ['Name', 'Phone', 'Address']) {
         const idx = (r.cols || []).map((m, i) => (m && m.field === field && m.how === 'one' ? i : -1)).filter((i) => i >= 0);
-        if (!idx.length || idx.some((i) => editedCols.has(i))) continue;
+        if (!copy || !idx.length || idx.some((i) => editedCols.has(i))) continue;
         const target = idx.find((i) => clean(r.raw[i])) ?? idx[0];
         const site = clean(p[field]).replace(/^'/, '');
         if (site && site !== clean(r.raw[target])) cells.push({ row: r.sheetRow, col: target + 1, edited: t.Edited || '', value: forSheet(site) });

@@ -119,7 +119,7 @@ test('volunteer signs up, gets approved, claims a delivery from the map', async 
   const map = await vol.get('/map');
   assert.match(map.text, /W Sample Rd, Phoenix, AZ 85031/);
   assert.doesNotMatch(map.text, /200 W Sample Rd/, 'house number hidden before claiming');
-  assert.doesNotMatch(map.text, /602/, 'phone hidden before claiming');
+  assert.doesNotMatch(map.text, /555\D?0123/, 'phone hidden before claiming');
   assert.match(map.text, /"lat":33.5/, 'coordinates rounded before claiming');
   assert.strictEqual((await vol.get('/packages/' + maria.ID)).status, 403);
 
@@ -302,6 +302,22 @@ test('google sheet sync is two-way', async () => {
   assert.deepStrictEqual(j.cells.find((c) => c.row === 2), { row: 2, col: 4, edited: '', value: '9 Site Rd, Mesa, AZ 85201' });
   q = await pkg(id);
   assert.strictEqual(q.Address, '9 Site Rd, Mesa, AZ 85201', 'an unedited sheet cell does not overwrite the site');
+
+  // An address retyped in the sheet without an edit mark (the mark can be missed) still reaches the site.
+  j = await post([head2, ['10/1/2026 9:00:00', 'Two Way', '480-555-0190', '9 Site Rd, Mesa, AZ 85201', ...t2, '']]);
+  assert.ok(!j.cells.some((c) => c.row === 2), 'sheet and site agree');
+  j = await post([head2, ['10/1/2026 9:00:00', 'Two Way', '480-555-0190', '77 Real Ave, Tempe, AZ 85281', ...t2, '']]);
+  assert.strictEqual(j.applied, 1);
+  assert.ok(!j.cells.some((c) => c.row === 2), 'the sheet edit is not overwritten by the old site address');
+  q = await pkg(id);
+  assert.strictEqual(q.Address, '77 Real Ave, Tempe, AZ 85281');
+  assert.strictEqual(q.Lat, '', 'cleared so the new address gets placed on the map');
+
+  // Rows synced before this copy was kept: the sheet's address wins the first time.
+  await store.mutate((db) => { const x = db['Care Packages'].find((y) => y.ID === id); x['Sheet Copy'] = ''; x.Address = '4400 W Demo Dr, Phoenix, AZ 85031'; });
+  j = await post([head2, ['10/1/2026 9:00:00', 'Two Way', '480-555-0190', '77 Real Ave, Tempe, AZ 85281', ...t2, '']]);
+  assert.ok(!j.cells.some((c) => c.row === 2));
+  assert.strictEqual((await pkg(id)).Address, '77 Real Ave, Tempe, AZ 85281');
 });
 
 test('messages: per-status care texts, two groups, coordinators only', async () => {

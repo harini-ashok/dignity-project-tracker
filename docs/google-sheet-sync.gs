@@ -71,11 +71,13 @@ function targetSheet() {
 // Marks which cells a person changed (tracker columns and form answers alike),
 // so only those go back to the website.
 function onEdit(e) {
+  // Only the synced tab has Tracker columns. (No form lookups here: a simple onEdit
+  // trigger isn't allowed to open the form, and would stop without marking anything.)
   var sheet = e.range.getSheet();
-  if (sheet.getSheetId() !== targetSheet().getSheetId() || e.range.getRow() === 1) return;
+  if (e.range.getRow() === 1) return;
   var head = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getDisplayValues()[0];
   var editedCol = head.indexOf('Tracker Edited') + 1;
-  if (!editedCol) return;
+  if (!editedCol || head.indexOf('Tracker ID') < 0) return;
   var fields = [];
   for (var c = e.range.getColumn(); c <= e.range.getLastColumn(); c++) {
     var h = head[c - 1];
