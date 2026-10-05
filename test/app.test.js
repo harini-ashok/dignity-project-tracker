@@ -119,7 +119,7 @@ test('volunteer signs up, gets approved, claims a delivery from the map', async 
   const map = await vol.get('/map');
   assert.match(map.text, /W Sample Rd, Phoenix, AZ 85031/);
   assert.doesNotMatch(map.text, /200 W Sample Rd/, 'house number hidden before claiming');
-  assert.doesNotMatch(map.text, /602/, 'phone hidden before claiming');
+  assert.doesNotMatch(map.text, /555\D?0123/, 'phone hidden before claiming');
   assert.match(map.text, /"lat":33.5/, 'coordinates rounded before claiming');
   assert.strictEqual((await vol.get('/packages/' + maria.ID)).status, 403);
 
