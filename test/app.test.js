@@ -233,6 +233,55 @@ test('Google Sheet sync endpoint needs the secret and imports rows without dupli
   assert.match((await store.settings()).last_form_sync, /1 new/);
 });
 
+test('google sheet sync is two-way', async () => {
+  const { TRACKER_COLUMNS } = require('../lib/importer');
+  const post = async (rows) => {
+    const r = await fetch(base + '/api/form-sync', { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer test-sync-secret-0123456789' }, body: JSON.stringify({ rows }) });
+    assert.strictEqual(r.status, 200);
+    return r.json();
+  };
+  const head = ['Timestamp', 'Primary Contact First Name / Client Name -- Nombre de contacto principal:', 'Phone Number (of recipient) / Número de teléfono:', ...TRACKER_COLUMNS];
+  const blank = TRACKER_COLUMNS.map(() => '');
+
+  // Form -> site, and the site's status comes back for the sheet's Tracker columns.
+  let j = await post([head, ['10/1/2026 9:00:00', 'Two Way', '480-555-0190', ...blank]]);
+  assert.strictEqual(j.added, 1);
+  const w = j.write.find((x) => x.row === 2);
+  const id = w.values[0];
+  assert.match(id, /^CP-/);
+  assert.strictEqual(w.values[1], 'New');
+  assert.ok(!(await store.all('Form Answers')).some((a) => a.ID === id && /^Tracker/.test(a.Question)), 'tracker columns are not form answers');
+
+  // The site moves on; a request also comes in through the website's own form.
+  await store.mutate((db) => {
+    db['Care Packages'].find((p) => p.ID === id).Status = 'Ready for Volunteer';
+    db['Care Packages'].push({ ID: 'CP-9001', Submitted: '2026-10-02 10:00', Status: 'New', Name: "'=HYPERLINK(1)", Phone: '480-555-0191', Source: 'Website', Updated: '2026-10-02 10:00' });
+  });
+
+  // Sheet -> site: only the cell someone edited (Volunteer) is applied; the stale status in the sheet is not.
+  const tracked = [id, 'New', 'Sheet Volunteer', '', '', '', 'Volunteer'];
+  j = await post([head, ['10/1/2026 9:00:00', 'Two Way', '480-555-0190', ...tracked]]);
+  assert.strictEqual(j.added, 0);
+  assert.strictEqual(j.applied, 1);
+  const p = await pkg(id);
+  assert.strictEqual(p['Delivery Volunteer'], 'Sheet Volunteer');
+  assert.strictEqual(p.Status, 'Ready for Volunteer');
+  const back = j.write.find((x) => x.row === 2).values;
+  assert.deepStrictEqual(back.slice(0, 3), [id, 'Ready for Volunteer', 'Sheet Volunteer']);
+  assert.strictEqual(back[6], '', 'the edit marker is cleared');
+
+  // Website requests are appended to the sheet, under the right questions, formulas defused.
+  const line = j.append.find((l) => l[3] === 'CP-9001');
+  assert.ok(line);
+  assert.strictEqual(line[1], "'=HYPERLINK(1)");
+  assert.strictEqual(line[2], '480-555-0191');
+  assert.strictEqual(line[3], 'CP-9001');
+  // Once it's in the sheet it isn't appended again.
+  j = await post([head, ['10/1/2026 9:00:00', 'Two Way', '480-555-0190', ...tracked.slice(0, 6), ''], line]);
+  assert.ok(!j.append.some((l) => l[3] === 'CP-9001'));
+  assert.strictEqual(j.added, 0);
+});
+
 test('sign-ins survive a restart', async () => {
   const file = path.join(dir, '.sessions.json');
   await new Promise((r) => setTimeout(r, 400));
