@@ -5,11 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title><%= title %> · <%= settings.org_name || 'Dignity Tracker' %></title>
 <link rel="stylesheet" href="/static/style.css">
+<% if (settings.logo_url) { %><link rel="icon" href="<%= settings.logo_url %>"><% } %>
+<meta name="theme-color" content="#5446cf">
 <% if (typeof head !== 'undefined') { %><%- head %><% } %>
 </head>
 <body>
 <header class="top">
-  <a class="brand" href="/"><span class="dot"></span><%= settings.org_name || 'Dignity Tracker' %></a>
+  <a class="brand" href="/"><% if (settings.logo_url) { %><img class="logo" src="<%= settings.logo_url %>" alt="" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'dot'}))"><% } else { %><span class="dot"></span><% } %><%= settings.org_name || 'Dignity Tracker' %></a>
   <% if (user) { %>
   <input type="checkbox" id="navt" class="navt"><label for="navt" class="burger" aria-label="Menu">☰</label>
   <nav>

@@ -34,7 +34,7 @@ The statuses match the STATUS column already used in the coordinator's Pending s
 - **Volunteers** – names, phones, role (admin = coordinator), status. PINs are stored hashed.
 - **Packing Shifts**, **Messages** (outbox of drafted texts), **Settings** (org name, HQ address, message wording in English and Spanish).
 
-Status columns have dropdowns in Excel. A backup copy is saved every hour in `data/backups/`. Sign-ins are kept in `data/.sessions.json`, so restarting the app doesn't sign people out.
+Status columns have dropdowns in Excel. The look follows dignityphoenix.org; change the logo or website link on the **Excel** page under Settings (`logo_url`, `website_url`). A backup copy is saved every hour in `data/backups/`. Sign-ins are kept in `data/.sessions.json`, so restarting the app doesn't sign people out.
 
 The Inventory sheet starts with about 90 common items (hygiene, cleaning, baby, pet and pantry, using the form's wording) at 0 on hand, so a coordinator only has to type in counts.
 Editing in Excel: download from the **Excel** page, edit, upload it back (do it at a quiet time, because changes made on the site in between are replaced).
